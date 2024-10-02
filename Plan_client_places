@@ -1,0 +1,1324 @@
+// Script for create plan for client, reconcilement for client, plan for placement and reconcilement for placement.
+// Version 2.0
+// Date: 03/02/2021
+// Created by Maxim Terescshenko
+// Update 11/04/2024
+// *change name file
+// *delete Package, add function HIDE
+
+function ClientPlan() { // create plan for client
+  var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var valuesToDelete = ['Agency Fee, amount', 'Billing Fee, amount'];
+
+  var nameFile = ss.getName();
+  var partName = nameFile.replace(/\OWN_PLAN[^\]*]/,""); // remove OWN_PLAN
+  Logger.log(nameFile)
+  var crNew = SpreadsheetApp.create("newage." + "_Plan_" + partName);// create new spreadsheet
+  crNew.setSpreadsheetLocale("uk_UA")
+  var ssNew = SpreadsheetApp.openByUrl(crNew.getUrl());
+  Email(crNew,'Total');
+  // --------------------add link on client version--------------------
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var data = sheet.getRange(1,1,lr,lcol).getValues();  
+    var URL="Client_version"
+      for(let i = 0;i < data.length;i++){
+          if(data[i].indexOf(URL)!==-1){ 
+            var indexsite=i+1;
+            break
+          }
+        }
+    ss.getActiveSheet().getRange(indexsite,3).setValue(ssNew.getUrl());
+  // --------------------find index Value--------------------
+  var employeeName = '1@delete_sheet@1';
+    var startRow;
+          // --------------------find index Row--------------------
+    for(let i = 0;i < data.length;i++){
+        if(data[i].indexOf(employeeName)!==-1){ 
+          startRow=i+1;
+          break
+        }
+    }
+    // --------------------find index Column--------------------
+    var dataCol = sheet.getRange(startRow,1,lr,lcol).getValues()[0];
+    var startCol = dataCol.indexOf(employeeName)+1; 
+  
+  // --------------------find/copy sheet for client--------------------
+    sheet.getRange(startRow,startCol).getValue()
+  for (i=startRow;i < lr;i++){
+     if(sheet.getRange(i,startCol).getValue()=="yes"){       
+       var nameNewSheet = sheet.getRange(i,startCol-1).getValue();      
+       var clientSheet = ss.getSheetByName(nameNewSheet);
+       if (clientSheet.isSheetHidden()) {
+         clientSheet.showSheet()
+       }
+       clientSheet.copyTo(ssNew).setName(nameNewSheet); 
+       if (nameNewSheet=="Media"){
+          MediaViewability(ssNew.getUrl());
+          Logger.log(nameNewSheet + " MediaViewability " + new Date().getTime()) 
+       }
+       else if (nameNewSheet=="SEM"){
+        //  SEMBidStrategy(ssNew.getUrl());
+         Logger.log(nameNewSheet + " SEMBidStrategy " + new Date().getTime())
+       }
+    }
+    else if(sheet.getRange(i,startCol).getValue()=="del"){
+      var nameNewSheet = sheet.getRange(i,startCol-1).getValue();      
+      var clientSheet = ss.getSheetByName(nameNewSheet);
+      if (clientSheet) { 
+        clientSheet.hideSheet();
+        } else {
+          Logger.log("Лист з назвою " + nameNewSheet + " не знайдено.");
+        }
+    }
+  }
+
+  SpreadsheetApp.setActiveSpreadsheet(ssNew);
+  //----------change owner for file client version----------
+  ChangeFileOwner(ss.getId(),ssNew.getId());
+  Logger.log("client version")
+  
+  // --------------------Update formula in client plan-------------------- 
+  var shts = ssNew.getSheets();
+  for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+    if(Name=='Total'){
+      ClearValidation(Name); // clear validation in client plan
+      DeleteImage(Name); // clear image macros in client plan
+      Logger.log(Name + " DeleteImage " + new Date().getTime())
+      UpdateFormula(Name);// update formula in client version
+      Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      ClearClientPlan(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientPlan " + new Date().getTime())
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearMail(Name);// clear email and link in client version
+      Logger.log(Name + " ClearMail " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+      DeleteRowsInSheet(Name, valuesToDelete); 
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+    else if(Name=='Media Summary'){
+      UpdateFormula(Name);// update formula in client version 
+      DeleteRowsInSheet(Name, valuesToDelete);     
+    }
+    else if(Name=='Media'){
+      //--------------drawing remove------------------------------------------
+        var drawings = SpreadsheetApp.getActive().getSheetByName(Name).getDrawings();
+        drawings[0].remove()
+      ClearValidation(Name); // clear validation in client plan
+      Logger.log(Name + " ClearValidation " + new Date().getTime())
+      WithoutFormula(ssNew.getUrl());//disable formula
+      Logger.log(Name + " WithoutFormula " + new Date().getTime())
+      ClearClientPlan(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientPlan " + new Date().getTime())
+      // UpdateFormula(Name);// update formula in client version
+      // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearPlanningPart(Name);// clear part for planning
+      Logger.log(Name + " ClearPlanningPart " + new Date().getTime())
+      // Package(Name)
+      Logger.log(Name + " Package " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+
+
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+    else if(Name=='SEM'||Name=='SMM'||Name=='Production'){
+      ClearValidation(Name); // clear validation in client plan
+      Logger.log(Name + " ClearValidation " + new Date().getTime())
+      ClearClientPlan(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientPlan " + new Date().getTime())
+      // UpdateFormula(Name);// update formula in client version
+      // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+  }
+  
+  // --------------------Clear data in client plan-------------------- 
+    for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+     if(Name=='Лист1'||Name=='Sheet1'||Name=='description'){
+       DelSheet(Name);
+     }
+     else if(Name=='Package compositions'){
+       Package(Name)
+     }
+
+      else {
+        ClearDelete(Name);// delete columns in clint version 
+      }
+  }  
+  var TimeEnd = new Date().getTime();
+  var timeScript = msToTime(TimeEnd-TimeStart);
+  SpreadsheetApp.getUi().alert('ClientPlan complete. Time finish: ' + timeScript)
+}
+
+function ClientReconcilement() {// create reconcilement for client 
+  var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var valuesToDelete = ['Agency Fee, amount', 'Billing Fee, amount'];
+  var nameFile = ss.getName();
+  var partName = nameFile.replace(/\OWN_PLAN[^\]*]/,""); // remove OWN_PLAN
+  Logger.log(nameFile)
+  var crNew = SpreadsheetApp.create("newage." + "_Reconcilement_" + partName);// creat new spreadsheet
+  crNew.setSpreadsheetLocale("uk_UA")
+  var ssNew = SpreadsheetApp.openByUrl(crNew.getUrl());
+  Email(crNew,'Total');
+   // --------------------add link on client version--------------------
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var data = sheet.getRange(1,1,lr,lcol).getValues();  
+  var URL="Client_version"
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(URL)!==-1){ 
+         var indexsite=i+1;
+        break
+      }
+  }
+  ss.getActiveSheet().getRange(indexsite,4).setValue(ssNew.getUrl());
+
+
+  // --------------------find index Value--------------------
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+
+  var data = sheet.getRange(1,1,lr,lcol).getValues();  
+  var employeeName = '1@delete_sheet@1';
+  var startRow;
+        // --------------------find index Row--------------------
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(employeeName)!==-1){ 
+         startRow=i+1;
+        break
+      }
+  }
+        // --------------------find index Column--------------------
+  var dataCol = sheet.getRange(startRow,1,lr,lcol).getValues()[0];
+  var startCol = dataCol.indexOf(employeeName)+1; 
+  
+  // --------------------find/copy sheet for client--------------------
+  sheet.getRange(startRow,startCol).getValue()
+  for (i=startRow;i < lr;i++){
+     if(sheet.getRange(i,startCol).getValue()=="yes"){       
+       var nameNewSheet = sheet.getRange(i,startCol-1).getValue();      
+       var clientSheet = ss.getSheetByName(nameNewSheet);
+       if (clientSheet.isSheetHidden()) {
+         clientSheet.showSheet()
+       }
+       clientSheet.copyTo(ssNew).setName(nameNewSheet); 
+       if (nameNewSheet=="Media"){
+          MediaViewability(ssNew.getUrl());
+          Logger.log(nameNewSheet + " MediaViewability " + new Date().getTime()) 
+       }
+    }
+    else if(sheet.getRange(i,startCol).getValue()=="del"){
+      var nameNewSheet = sheet.getRange(i,startCol-1).getValue();      
+      var clientSheet = ss.getSheetByName(nameNewSheet);
+      if (clientSheet) { 
+        clientSheet.hideSheet();
+        } else {
+          Logger.log("Лист з назвою " + nameNewSheet + " не знайдено.");
+        }
+    }
+  }
+
+  SpreadsheetApp.setActiveSpreadsheet(ssNew);
+    //----------change owner for file client version----------
+  ChangeFileOwner(ss.getId(),ssNew.getId());
+  Logger.log("client version")
+  
+  // --------------------Update formula in client plan-------------------- 
+  var shts = ssNew.getSheets();
+  for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+    if(Name=='Total'){
+      ClearValidation(Name); // clear validation in client plan
+      DeleteImage(Name); // clear image macros in client plan
+      Logger.log(Name + " DeleteImage " + new Date().getTime())
+      UpdateFormula(Name);// update formula in client version
+      Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearClientReconcilement(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientReconcilement " + new Date().getTime())
+      ClearMail(Name);// clear email and link in client version
+      Logger.log(Name + " ClearMail " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+      DeleteRowsInSheet(Name, valuesToDelete); 
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+    else if(Name=='Media Summary'){
+      UpdateFormula(Name);// update formula in client version 
+      DeleteRowsInSheet(Name, valuesToDelete);      
+    }
+    else if(Name=='Media'){
+      ClearValidation(Name); // clear validation in client plan
+      Logger.log(Name + " ClearValidation " + new Date().getTime())
+      WithoutFormula(ssNew.getUrl());
+      Logger.log(Name + " WithoutFormula " + new Date().getTime())
+      Auditor(Name);// update formula in client version
+      Logger.log(Name + " Auditor " + new Date().getTime())     
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearClientReconcilement(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientReconcilement " + new Date().getTime())
+      ClearPlanningPart(Name);// clear part for planning
+      Logger.log(Name + " ClearPlanningPart " + new Date().getTime())
+
+      // Package(Name)
+      Logger.log(Name + " Package " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+      // UpdateFormula(Name);// update formula in client version
+      // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+    else if(Name=='SEM'||Name=='SMM'||Name=='Production'){
+      ClearValidation(Name); // clear validation in client plan
+      Logger.log(Name + " ClearValidation " + new Date().getTime())
+      ClearValue(Name);// clear formula in client version
+      Logger.log(Name + " ClearValue " + new Date().getTime())
+      ClearClientReconcilement(Name);// clear Reconcilement part in client version
+      Logger.log(Name + " ClearClientReconcilement " + new Date().getTime())
+      ClearFirstColumn(Name);//clear first column
+      Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+      // UpdateFormula(Name);// update formula in client version
+      // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+      SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+    }
+  }
+ 
+  // --------------------Clear data in client plan-------------------- 
+    for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+     if(Name=='Лист1'||Name=='Sheet1'||Name=='description'){
+       DelSheet(Name);
+     }
+     else if(Name=='Package compositions'){
+       Package(Name)
+     }     
+      else {
+        ClearDelete(Name);// delete columns in clint version 
+      }
+  }  
+  var TimeEnd = new Date().getTime();
+  var timeScript = msToTime(TimeEnd-TimeStart);
+  SpreadsheetApp.getUi().alert('ClientReconcilement complete. Time finish: ' + timeScript)
+}
+
+function SitePlan() {// create plan for placement
+  var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var nameFile = ss.getName();
+  var partName = nameFile.replace(/\OWN_PLAN[^\]*]/,""); // remove OWN_PLAN
+  Logger.log(nameFile)
+  var crNew = SpreadsheetApp.create("newage." + "_Site_" + partName);// creat new spreadsheet
+  crNew.setSpreadsheetLocale("uk_UA")
+  var ssNew = SpreadsheetApp.openByUrl(crNew.getUrl());
+  Email(crNew,'Total');
+  // --------------------add link on client version--------------------
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var data = sheet.getRange(1,1,lr,lcol).getValues();  
+    var SiteURL="Site_version"
+    for(let i = 0;i < data.length;i++){
+        if(data[i].indexOf(SiteURL)!==-1){ 
+          var indexsite=i+1;
+          break
+        }
+    }
+    ss.getActiveSheet().getRange(indexsite,3).setValue(ssNew.getUrl());
+      
+    var clientSheet = ss.getSheetByName("Media");
+    var pack=ss.getSheetByName("Package compositions")
+      clientSheet.copyTo(ssNew).setName("Media");
+      pack.copyTo(ssNew).setName("Package compositions");
+    NameCampaign(ssNew.getUrl(),"Media")
+    SpreadsheetApp.setActiveSpreadsheet(ssNew);
+    Logger.log("client version")
+  
+  // --------------------Update formula in client plan-------------------- 
+    var shts = ssNew.getSheets();
+    for (i = 0; i < shts.length; i++) {
+      var Name = shts[i].getName();
+      if(Name=='Media'){
+        ClearSitePlan(Name);// clear Reconcilement part in client version
+        Logger.log(Name + " ClearClientPlan " + new Date().getTime())
+        // UpdateFormula(Name);// update formula in client version
+        // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+        ClearValue(Name);// clear formula in client version
+        Logger.log(Name + " ClearValue " + new Date().getTime())
+        PackageSite(Name);
+        Logger.log(Name + " PackgeSite " + new Date().getTime())
+        // ClearPlanningPart(Name);// clear part for planning
+        // Logger.log(Name + " ClearPlanningPart " + new Date().getTime())
+        ClearValidation(Name); // clear validation in client plan
+        Logger.log(Name + " ClearValidation " + new Date().getTime())
+        // Package(Name)
+        Logger.log(Name + " Package " + new Date().getTime())
+        ClearFirstColumn(Name);//clear first column
+        Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+        SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+      }
+
+    }
+  // --------------------Clear data in client plan-------------------- 
+    for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+     if(Name=='Лист1'||Name=='Sheet1'||Name=='description'){
+       DelSheet(Name);
+     }
+     else if(Name=='Package compositions'){
+       Package(Name)
+     }
+      else {
+        ClearDelete(Name);// delete columns in clint version 
+      }
+  }  
+  var TimeEnd = new Date().getTime();
+  var timeScript = msToTime(TimeEnd-TimeStart);
+  SpreadsheetApp.getUi().alert('SitePlan complete. Time finish: ' + timeScript)
+}
+
+function SiteReconcilement() { // create reconcilement for placement
+  var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var nameFile = ss.getName();
+  var partName = nameFile.replace(/\OWN_PLAN[^\]*]/,""); // remove OWN_PLAN
+  Logger.log(nameFile)
+  var crNew = SpreadsheetApp.create("newage." + "_SiteReconcilement_" + partName);// creat new spreadsheet
+  crNew.setSpreadsheetLocale("uk_UA")
+  var ssNew = SpreadsheetApp.openByUrl(crNew.getUrl());
+  Email(crNew,'Total');
+  // --------------------add link on client version--------------------
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var data = sheet.getRange(1,1,lr,lcol).getValues();  
+    var SiteURL="Site_version"
+      for(let i = 0;i < data.length;i++){
+          if(data[i].indexOf(SiteURL)!==-1){ 
+            var indexsite=i+1;
+            break
+          }
+      }
+    ss.getActiveSheet().getRange(indexsite,4).setValue(ssNew.getUrl());
+          
+    var clientSheet = ss.getSheetByName("Media");
+    var pack=ss.getSheetByName("Package compositions")
+    clientSheet.copyTo(ssNew).setName("Media");
+    pack.copyTo(ssNew).setName("Package compositions");
+    NameCampaign(ssNew.getUrl(),"Media")
+    SpreadsheetApp.setActiveSpreadsheet(ssNew);
+    Logger.log("client version")
+  
+  // --------------------Update formula in client plan-------------------- 
+    var shts = ssNew.getSheets();
+    for (i = 0; i < shts.length; i++) {
+      var Name = shts[i].getName();
+      if(Name=='Media'){
+        
+        ClearSiteReconcilement(Name);// clear Reconcilement part in client version
+        Logger.log(Name + " ClearClientPlan " + new Date().getTime())
+        // UpdateFormula(Name);// update formula in client version
+        // Logger.log(Name + " UpdateFormula " + new Date().getTime())
+        ClearValue(Name);// clear formula in client version
+        Logger.log(Name + " ClearValue " + new Date().getTime())
+        // ClearPlanningPart(Name);// clear part for planning
+        // Logger.log(Name + " ClearPlanningPart " + new Date().getTime())
+        ClearValidation(Name); // clear validation in client plan
+        Logger.log(Name + " ClearValidation " + new Date().getTime())
+        // Package(Name)
+        Logger.log(Name + " Package " + new Date().getTime())
+        ClearFirstColumn(Name);//clear first column
+        Logger.log(Name + " ClearFirstColumn " + new Date().getTime())
+        SpreadsheetApp.getActive().getSheetByName(Name).clearConditionalFormatRules();//clear format
+      }
+
+    }
+ 
+  // --------------------Clear data in client plan-------------------- 
+    for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+     if(Name=='Лист1'||Name=='Sheet1'||Name=='description'){
+       DelSheet(Name);
+     }
+     else if(Name=='Package compositions'){
+       Package(Name)
+     }
+      else {
+        ClearDelete(Name);// delete columns in clint version 
+      }
+  }  
+  var TimeEnd = new Date().getTime();
+  var timeScript = msToTime(TimeEnd-TimeStart);
+  SpreadsheetApp.getUi().alert('SiteReconcilement complete. Time finish: ' + timeScript)
+  // showAnchor('Client Plan',ssNew.getUrl());
+}
+
+
+// scripts for main scripts
+//
+//
+//
+
+function DeleteImage(NameSheet){
+  var images = SpreadsheetApp.getActive().getSheetByName(NameSheet).getDrawings();
+  for (var i = 0; i < images.length; i++) {  
+    images[i].remove();
+  }
+}
+
+function ClearClientPlan(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var keyDelName = '$@$1';
+       // --------------------Delete range-------------------- 
+  for(var i = 1;i < lcol;i++){
+      if(sheet.getRange(8,i).getValue()==keyDelName){
+        sheet.getRange(3, 5, 5, lcol).deleteCells(SpreadsheetApp.Dimension.COLUMNS);
+        sheet.deleteColumns(i,lcol-i+1);
+        break
+      }
+  }
+}
+
+function ClearClientReconcilement(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var keyDelName = '$@$3';
+  var keyClear = '$@$1';
+  // --------------------Delete range-------------------- 
+  var startdataCol = sheet.getRange(8,1,1,lcol).getValues()[0];
+  var startCol = startdataCol.indexOf(keyClear)+1;
+  var enddataCol = sheet.getRange(8,1,1,lcol).getValues()[0];
+  var endCol = enddataCol.indexOf(keyDelName)+1;
+      sheet.deleteColumns(endCol,lcol-endCol+1);
+      sheet.getRange(1,startCol,lr,1).clear();  
+  sheet.getRange(3, 5, 5, lcol).deleteCells(SpreadsheetApp.Dimension.COLUMNS);
+}
+
+function ClearPlanningPart(NameSheet){
+  
+  // --------------------Delete range for planning--------------------
+  
+    var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var startDelName = '$@$2';
+    var endDelName = '$@$8';
+        var startdataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+        var startCol = startdataCol.indexOf(startDelName)+1;
+        var enddataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+        var endCol = enddataCol.indexOf(endDelName)+1;
+        sheet.deleteColumns(startCol+2,endCol-startCol-1);
+        sheet.getRange(1,startCol,lr,1).clear();
+}
+
+function ClearValue(NameSheet){
+  
+  // --------------------Clear formula for client--------------------
+  
+    var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var keyValName = 'Value_Column';
+    var keyHideName = 'HIDE';
+    for(var i = 1;i < lcol;i++){
+        if(sheet.getRange(1,i).getValue()==keyValName){
+          sheet.getRange(1, i, lr).copyTo(sheet.getRange(1, i, lr), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+          sheet.getRange(1, i).clear();
+        }
+        else if(sheet.getRange(1,i).getValue()==keyHideName){
+          sheet.hideColumns(i,i-i+1);
+          sheet.getRange(1, i).clear();
+        }
+    }
+}
+
+function ClearDelete(NameSheet){
+  
+  // --------------------Delete range for client--------------------
+  
+    var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+    var lr=sheet.getLastRow();
+    var lcol=sheet.getLastColumn();
+    var keyDelName = 'Delete_Column';
+    for(var i = 1;i <= lcol;i++){
+        if(sheet.getRange(1,i).getValue()==keyDelName){
+          sheet.deleteColumn(i);
+          i=i-1
+        }
+    }
+}
+
+function msToTime(s) {
+  var ms = s % 1000;
+  s = (s - ms) / 1000;
+  var secs = s % 60;
+  s = (s - secs) / 60;
+  var mins = s % 60;
+  var hrs = (s - mins) / 60;
+  //return hrs + ':' + mins + ':' + secs; // milliSecs are not shown but you can use ms if needed
+  return hrs + 'hh:' + mins + 'mm:' + secs + 'sec:' + ms + 'ms'; // milliSecs are not shown but you can use ms if needed
+}
+
+function UpdateFormula(name) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName(name);
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  var range = sheet.getRange(1,1,lastRow,lastColumn);
+  // contains empty strings or cell formulas
+  var formulas = range.getFormulas();
+  // contains text, formula errors, formula output
+  var contents = range.getValues(); 
+
+  // formulas[0][0].length > 1 ==> is a formula
+  for (var r = 0; r < range.getHeight(); r++) {
+    for (var c = 0; c < range.getWidth(); c++) {
+      var cell = range.getCell(r+1,c+1);
+      // clear only the contents, not notes or comments or formatting.
+      cell.clearContent();
+      if (formulas[r][c].length > 1) {
+        // cell was a formula, so insert the formula back in place
+        cell.setFormula(formulas[r][c]);
+      } else {
+        // cell was not a formula, so insert the text content back in place
+         cell.setValue(contents[r][c]);
+      }
+    }
+  }  
+}
+
+function ClearValidation(name){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(name)
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  var range = sheet.getRange(1,1,lastRow,lastColumn);
+  range.clearDataValidations();
+}
+
+function ClearFirstColumn(name){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(name)
+  var lastRow = sheet.getLastRow();
+  var range = sheet.getRange(1,1,lastRow,1);
+  range.clear();
+}
+
+function showAnchor(name,url) {
+  var html = '<html><body><a href="'+url+'" target="blank" onclick="google.script.host.close()">'+name+'</a></body></html>';
+  var ui = HtmlService.createHtmlOutput(html)
+  SpreadsheetApp.getUi().showModelessDialog(ui,"Client");
+}
+
+function ClearMail(NameSheet){
+  
+  // --------------------Clear formula for client--------------------
+  
+    var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+    var lr=sheet.getLastRow();
+    var keyValName = 'Client_version';
+    for(var i = 1;i <= lr;i++){
+        if(sheet.getRange(i,2).getValue()==keyValName){
+          sheet.getRange(i-1, 2,lr-i+2,3).clear()
+        }
+    }
+}
+
+function DelSheet(name){
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName(name);
+  ss.deleteSheet(sheet);
+}
+
+function Email(ClientBook,name){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(name)
+  var lastRow = sheet.getLastRow();
+  var keystart='Email for access';
+  var keyend='$@$€';
+  var data = sheet.getRange(1,2,lastRow,1).getValues(); 
+  var dataend = sheet.getRange(1,3,lastRow,1).getValues();
+        // --------------------find index Row--------------------
+  for(var i = 0;i < data.length;i++){
+      if(data[i].indexOf(keystart)!==-1){ 
+         var startRow=i+1;
+      }
+  }
+  for(var i = 0;i < dataend.length;i++){
+      if(dataend[i].indexOf(keyend)!==-1){ 
+         var endRow=i+1;
+      }
+  } 
+  var arrayEmail = sheet.getRange(startRow, 3, endRow - startRow).getValues();
+  var filteredEmails = arrayEmail.filter(function(row) {
+    return row[0]; 
+  })
+  Logger.log(filteredEmails)
+  SpreadsheetApp.openByUrl(ClientBook.getUrl()).addEditors(filteredEmails);
+  
+}
+function CreateTriggerValidation(){
+  //--------------check and creat trigger for datavalidation-----------------
+
+    var tigger = ScriptApp.getProjectTriggers().length
+    if (tigger==0){
+      ScriptApp.newTrigger("onEdit").forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet()).onEdit().create();
+    }
+}
+function onEdit(){
+  var sht = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var dataSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Validation");
+  sht.getActiveCell().getColumn();
+  sht.getActiveCell().getRow();
+  var ActiveCell=sht.getActiveCell(); 
+  if (ActiveCell.getColumn()==2 && ActiveCell.getRow()>9&& sht.getName () == "Media"){
+  ActiveCell.offset(0,1).clearContent().clearDataValidations(); 
+      var valid=dataSheet.getRange(1,1,1,dataSheet.getLastColumn()).getValues();
+      var indexData=valid[0].indexOf(ActiveCell.getValue())+1;
+      if(indexData!=0){
+      var validRange =dataSheet.getRange(2,indexData,dataSheet.getLastRow())
+      var validMedia = SpreadsheetApp.newDataValidation().requireValueInRange(validRange).build();
+      ActiveCell.offset(0,1).setDataValidation(validMedia);
+      }
+    }
+}
+
+function MediaViewability(URLClient) {
+
+  var OWNSheet = SpreadsheetApp.getActiveSpreadsheet();
+  var OWN_Sheet = OWNSheet.getSheetByName("Media");
+  var viewrange = "$@$@20";
+  var lr=OWN_Sheet.getLastRow();
+  var lcol=OWN_Sheet.getLastColumn();  
+  var owndataCol=OWN_Sheet.getRange(6,1,1,lcol).getValues()[0];
+  var Col = owndataCol.indexOf(viewrange)+1;
+  var viewdata=OWN_Sheet.getRange(6,Col,lr,2).getValues();
+
+  var ClientSheet = SpreadsheetApp.openByUrl(URLClient);
+  var Client_Sheet = ClientSheet.getSheetByName("Media"); 
+  var viewrange = "$@$@20";
+  var clientlr=Client_Sheet.getLastRow();
+  var clientlcol=Client_Sheet.getLastColumn();  
+  var CLientdataCol=Client_Sheet.getRange(6,1,1,clientlcol).getValues()[0];
+  var clientCol = CLientdataCol.indexOf(viewrange)+1;  
+  Client_Sheet.getRange(6,clientCol,lr,2).setValues(viewdata);
+}
+function SEMBidStrategy(URLClient) {
+
+  var OWNSheet = SpreadsheetApp.getActiveSpreadsheet();
+  var OWN_Sheet = OWNSheet.getSheetByName("SEM");
+  var viewrange = "$@$$Bid";
+  var lr=OWN_Sheet.getLastRow();
+  var lcol=OWN_Sheet.getLastColumn();  
+  var owndataCol=OWN_Sheet.getRange(6,1,1,lcol).getValues()[0];
+  var Col = owndataCol.indexOf(viewrange)+1;
+  var viewdata=OWN_Sheet.getRange(6,Col,lr,4).getValues();
+
+  var ClientSheet = SpreadsheetApp.openByUrl(URLClient);
+  var Client_Sheet = ClientSheet.getSheetByName("SEM"); 
+  var viewrange = "$@$$Bid";
+  var clientlr=Client_Sheet.getLastRow();
+  var clientlcol=Client_Sheet.getLastColumn();  
+  var CLientdataCol=Client_Sheet.getRange(6,1,1,clientlcol).getValues()[0];
+  var clientCol = CLientdataCol.indexOf(viewrange)+1;  
+  Client_Sheet.getRange(6,clientCol,lr,4).setValues(viewdata);
+}
+
+function NameCampaign(URLClient,Name) {
+
+  var OWNSheet = SpreadsheetApp.getActiveSpreadsheet();
+  var OWN_Sheet = OWNSheet.getSheetByName(Name);
+  var Campaigndata=OWN_Sheet.getRange(3,1,4,3).getValues();
+
+  var ClientSheet = SpreadsheetApp.openByUrl(URLClient);
+  var Client_Sheet = ClientSheet.getSheetByName(Name); 
+  Client_Sheet.getRange(3,1,4,3).setValues(Campaigndata);
+}
+
+function ClearSitePlan(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var keyDelName = '$@$6';
+  var TotalRow
+       // --------------------Delete range-------------------- 
+  for(var i = 1;i < lcol;i++){
+      if(sheet.getRange(8,i).getValue()==keyDelName){
+        sheet.getRange(3, 5, 5, lcol).deleteCells(SpreadsheetApp.Dimension.COLUMNS);
+        sheet.deleteColumns(i,lcol-i+1);
+        break
+      }
+  }
+  var data = sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(KeyTotal)!==-1){ 
+         TotalRow=i+1;
+        break
+      }
+  }
+  var startDelName = '$@$2';
+  var endDelName = '$@$9';
+      var startdataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+      var startCol = startdataCol.indexOf(startDelName)+1;
+      var enddataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+      var endCol = enddataCol.indexOf(endDelName)+1;
+      Logger.log("TotalRow"+TotalRow)
+      // copy past value VAT in site
+      sheet.getRange(10,endCol, lr,2).copyTo(sheet.getRange(10,endCol, lr,2), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      // copy past value in site
+      sheet.getRange(10,endCol, TotalRow-10,10).copyTo(sheet.getRange(10,endCol, TotalRow-10,10), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      sheet.deleteColumns(startCol+2,endCol-startCol-1);
+      sheet.getRange(1,startCol,lr,1).clear();
+}
+
+function ClearSiteReconcilement(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var keyDelName = '$@$6';
+  var TotalRow
+       // --------------------Delete range-------------------- 
+  for(var i = 1;i < lcol;i++){
+      if(sheet.getRange(8,i).getValue()==keyDelName){
+        sheet.getRange(3, 5, 5, lcol).deleteCells(SpreadsheetApp.Dimension.COLUMNS);
+        sheet.getRange(8,i).clear(); 
+        // sheet.deleteColumns(i,lcol-i+1);
+        break
+      }
+  }
+  var data = sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(KeyTotal)!==-1){ 
+         TotalRow=i+1;
+        break
+      }
+  }
+  var startDelName = '$@$2';
+  var endDelName = '$@$9';
+      var startdataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+      var startCol = startdataCol.indexOf(startDelName)+1;
+      var enddataCol = sheet.getRange(9,1,1,lcol).getValues()[0];
+      var endCol = enddataCol.indexOf(endDelName)+1;
+      Logger.log("TotalRow"+TotalRow)
+      // copy past value VAT in site
+      sheet.getRange(10,endCol, lr,2).copyTo(sheet.getRange(10,endCol, lr,2), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      // copy past value in site
+      sheet.getRange(10,endCol, TotalRow-10,lcol-endCol).copyTo(sheet.getRange(10,endCol, TotalRow-10,lcol-endCol), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      sheet.deleteColumns(startCol+2,endCol-startCol-1);
+      sheet.getRange(1,startCol,lr,1).clear();
+}
+
+function PackageSite(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var data = sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(KeyTotal)!==-1){ 
+         TotalRow=i+1;
+        break
+      }
+  }
+       // --------------------Delete range-------------------- 
+  for(var i = 10;i < TotalRow;i++){
+      var Sales = sheet.getRange(i,2).getValue();
+      var Pack = sheet.getRange(i,3).getValue();
+      if(Pack!=="" && (Sales=="Google"||Sales=="Facebook"||Sales=="Admixer_TD")||Pack=="Display & Video 360"){
+        // Pack!=="" && (Sales=="Google"||Sales=="Facebook")||Pack=="Display & Video 360"
+        sheet.deleteRow(i);
+        i=i-1;        
+      }
+  }
+}
+
+
+function Auditor(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var data = sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(KeyTotal)!==-1){ 
+         TotalRow=i+1;
+        break
+      }
+  }
+  sheet.getRange(TotalRow+2,1,1,lcol).copyTo(sheet.getRange(TotalRow+2,1,1,lcol), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false)
+
+}
+
+function Package(NameSheet){
+  
+  // --------------------Clear formula and delete range for client--------------------
+  // var spr = SpreadsheetApp.openByUrl('https://docs.google.com/spreadsheets/d/1utFpyEbP_h4bifODncn4OEM9d8A6_xDVuQbnuZ1CExQ/edit#gid=1774911409')
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet)
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+
+  var sheetpack= SpreadsheetApp.getActive().getSheetByName("Package compositions");
+  if (sheetpack.isSheetHidden()) {
+         sheetpack.showSheet()
+       }
+  var lrpack=sheetpack.getLastRow();
+  var lcolpack=sheetpack.getLastColumn();
+  var newAllPack = sheetpack.getRange(1,1,lrpack,lcolpack).getValues();
+  var newArray = [];
+  var arr = [];
+  
+ //----------------get Data from Media ------------------------
+  var data = sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+  for(let i = 0;i < data.length;i++){
+      if(data[i].indexOf(KeyTotal)!==-1){ 
+         TotalRow=i+1;
+        break
+      }
+  }
+  Logger.log(TotalRow)
+  //--------------insert arrays-----------------------------------
+  var dataSaleMedia=sheet.getRange(10,2,TotalRow-10,1).getValues();
+  var dataPackMedia=sheet.getRange(10,3,TotalRow-10,1).getValues();
+  var dataSalePack=sheetpack.getRange(1,1,1,lcolpack).getValues();
+  var dataPackPack=sheetpack.getRange(2,1,1,lcolpack).getValues();
+
+  //--------transpose array----------------
+    var newArraySale=[]
+     newArraySale.push(Object.keys(dataSalePack[0]).map ( function (columnNumber) {
+      return dataSalePack.map( function (row) {
+        return row[columnNumber];
+        
+      });
+    }));
+    dataSalePack = newArraySale[0];
+      //--------transpose array----------------
+    var newArrayPack=[]
+     newArrayPack.push(Object.keys(dataPackPack[0]).map ( function (columnNumber) {
+      return dataPackPack.map( function (row) {
+        return row[columnNumber];
+      });
+    }));
+    dataPackPack = newArrayPack[0];
+
+  for(i=0;i<dataSalePack.length;i++){
+     for(x=0;x<dataSaleMedia.length;x++){
+      if((dataSalePack[i].toLocaleString()==dataSaleMedia[x].toLocaleString()) && ( dataPackPack[i].toLocaleString()==dataPackMedia[x].toLocaleString() )){
+        //---------array i-values ----------------------------
+         var newArray = newAllPack.map(function(column){ 
+        return [column[i]];
+        });
+        arr.push(newArray);
+      }
+    }
+  }
+  if(arr.length>0){
+    //-------------------delete duplicate pack---------------
+    var newData = [];
+    for (var i in arr) {
+      var rowSale = arr[i];
+      var duplicate = false;
+      for (var j in newData) {
+        if (rowSale.join() == newData[j].join()) {
+          duplicate = true;
+        }
+      }
+      if (!duplicate) {
+        newData.push(rowSale);
+      }
+    }
+    //-------------------transpose rows to columns---------------
+      var ArrayClient=[]
+      ArrayClient.push(Object.keys(newData[0]).map ( function (columnNumber) {
+        return newData.map( function (row) {
+          return row[columnNumber];
+          
+        });
+      }));
+      sheetpack.getRange(1,1,lrpack,lcolpack).clearContent(); 
+      sheetpack.getRange(3,1,lrpack,lcolpack).clear();
+      sheetpack.getRange(1,1,ArrayClient[0].length,ArrayClient[0][0].length).setValues(ArrayClient[0]);
+    var lrpack=sheetpack.getLastRow()
+    // var lcolpack=sheetpack.getLastColumn()
+    Logger.log('lrpack = '+ lrpack)
+    Logger.log('lcolpack = '+ lcolpack)
+    Logger.log('ArrayClient[0].length = '+ ArrayClient[0].length)
+    Logger.log('ArrayClient[0][0].length = '+ ArrayClient[0][0].length)
+    sheetpack.deleteColumns(ArrayClient[0][0].length+1,lcolpack-ArrayClient[0][0].length);
+    sheetpack.deleteRows(lrpack+1,ArrayClient[0].length-lrpack);
+    // sheetpack.deleteRows(ArrayClient[0].length,lrpack-ArrayClient[0].length+1);
+  }
+  DelSheet("Package compositions")
+}
+
+function removeDuplicatesRow() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var data = sheet.getRange(23,6,32,15).getValues();
+  var newData = [];
+  for (var i in data) {
+    var rowSale = data[i];
+    var duplicate = false;
+    for (var j in newData) {
+      if (rowSale.join() == newData[j].join()) {
+        duplicate = true;
+      }
+    }
+    if (!duplicate) {
+      newData.push(rowSale);
+    }
+  }
+  
+  sheet.getRange(56, 6, newData.length, newData[0].length).setValues(newData);
+}
+
+function WithoutFormula(URLClient) {
+
+  var OWNSheet = SpreadsheetApp.getActiveSpreadsheet();
+  var OWN_Sheet = OWNSheet.getSheetByName("Media");
+  var lr=OWN_Sheet.getLastRow();
+  var lcol=OWN_Sheet.getLastColumn(); 
+  var data = OWN_Sheet.getRange(1,1,lr).getValues(); 
+  var KeyTotal="$@$5";
+    for(let i = 0;i < data.length;i++){
+        if(data[i].indexOf(KeyTotal)!==-1){ 
+          TotalRow=i-1;
+          break
+        }
+    }
+  Logger.log('TotalRow = '+ TotalRow)
+  var owndataCol=OWN_Sheet.getRange(10,1,TotalRow - 10,lcol).getValues();
+  Logger.log('owndataCol = '+ owndataCol)
+  var ClientSheet = SpreadsheetApp.openByUrl(URLClient);
+  var Client_Sheet = ClientSheet.getSheetByName("Media"); 
+  Client_Sheet.getRange(10,1,TotalRow - 10,lcol).setValues(owndataCol);
+}
+
+function ChangeFileOwner(FileMove,ClientFile){
+  //----------------- get destination file and parent folder---------------
+    // var FileMove = SpreadsheetApp.getActiveSpreadsheet().getId()
+    var driveFile = DriveApp.getFileById(FileMove); 
+    var parentFolder = driveFile.getParents();
+    while (parentFolder.hasNext()) {
+      var folder = parentFolder.next();
+      Logger.log(folder.getName());
+      IDfolder = folder.getId();
+      Logger.log(folder.getId());
+    }
+  //----------------- change owner parent/parent folder---------------   
+    var parent = DriveApp.getFolderById(IDfolder)
+    parentFolder1 = parent.getParents();
+    while(parentFolder1.hasNext()){
+        var folder1 =parentFolder1.next();
+        Logger.log("folder1 = " + folder1.getName())
+        if(folder1.getOwner() !=="analytics@newage.agency"){
+          folder1.setOwner("analytics@newage.agency")
+        }
+      }
+
+  //----------------- change owner parent/child/child folder---------------     
+    var childrenFolder = folder1.getFolders();
+    while(childrenFolder.hasNext()){
+      var child=childrenFolder.next();
+         if(child.getName()=="Клиент"){
+           if(child.getOwner() !=="analytics@newage.agency"){
+                  child.setOwner("analytics@newage.agency")
+              }
+            //----------------- change file owner---------------
+              var file = DriveApp.getFileById(ClientFile).moveTo(child);
+              if(file.getOwner()!=="analytics@newage.agency"){
+              file.setOwner("analytics@newage.agency")
+              }
+         }   
+      }
+
+}
+
+function MoveOwner() {
+  //----------------- change folder owner---------------
+    var folders = DriveApp.getFoldersByName('testFolder');
+      while (folders.hasNext()) {
+      var folder = folders.next();
+      if(folder.getOwner() !=="analytics@newage.agency"){
+      folder.setOwner("analytics@newage.agency")
+      }
+    }
+
+  var FileMove = SpreadsheetApp.getActiveSpreadsheet().getId()
+
+  //----------------- change file owner---------------
+    var file = DriveApp.getFileById(FileMove).moveTo(folder);
+    if(file.getOwner()!=="analytics@newage.agency"){
+    file.setOwner("analytics@newage.agency")
+    }
+}
+
+function Parents() {
+  //----------------- get destination file and parent folder---------------
+    var FileMove = SpreadsheetApp.getActiveSpreadsheet().getId()
+    var driveFile = DriveApp.getFileById(FileMove); 
+    var parentFolder = driveFile.getParents();
+    while (parentFolder.hasNext()) {
+      var folder = parentFolder.next();
+      Logger.log(folder.getName());
+      IDfolder = folder.getId();
+      Logger.log(folder.getId());
+    }
+  //--------------change owner for OWN version---------------
+    var file = DriveApp.getFileById(FileMove).moveTo(folder);
+      if(file.getOwner()!=="analytics@newage.agency"){
+      file.setOwner("analytics@newage.agency")
+      }
+  //----------------- change owner parent/parent folder---------------   
+    var parent = DriveApp.getFolderById(IDfolder)
+    parentFolder1 = parent.getParents();
+    while(parentFolder1.hasNext()){
+        var folder1 =parentFolder1.next();
+        Logger.log("folder1 = " + folder1.getName())
+        if(folder1.getOwner() !=="analytics@newage.agency"){
+          folder1.setOwner("analytics@newage.agency")
+        }
+      }
+
+  //----------------- change owner parent/child/child folder---------------     
+    var childrenFolder = folder1.getFolders();
+    while(childrenFolder.hasNext()){
+      var child=childrenFolder.next();
+      Logger.log("child = " + child.getName())
+          var childrenFolder1 = child.getFolders()
+            while(childrenFolder1.hasNext()){
+              var child1=childrenFolder1.next();
+              Logger.log("child1 = " + child1.getName())
+              if(child1.getOwner() !=="analytics@newage.agency"){
+                  child1.setOwner("analytics@newage.agency")
+              }            
+            }
+        if(child.getOwner() !=="analytics@newage.agency"){
+                  child.setOwner("analytics@newage.agency")
+              }   
+      }
+
+
+}
+function currencyChange(){
+  var TimeStart = new Date().getTime();
+  var ss = SpreadsheetApp.getActiveSpreadsheet() ;
+  var shts = ss.getSheets();
+  Logger.log("ss " + ss)
+  Logger.log("shts " + shts)
+  for (i = 0; i < shts.length; i++) {
+    var Name = shts[i].getName();
+    if(Name=='Media Summary'){
+              Logger.log("Currency_Summary");
+        Currency_Summary(Name);
+
+    }else if(Name=='Total' || Name=='Media' || Name=='SMM' || Name=='SEM'){
+      //
+      Currency_test(Name)
+      // Logger.log(1);
+      Logger.log("Currency_test" + Name);
+      }
+  }
+  var TimeEnd = new Date().getTime();
+  var timeScript = msToTime(TimeEnd-TimeStart);
+  SpreadsheetApp.getUi().alert('Replace Currency rates complete. Time finish: ' + timeScript)
+}
+function Currency_test(NameSheet){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var shts = SpreadsheetApp.getActive().getSheetByName("Total");
+  var lr=sheet.getLastRow();
+  var lcol=sheet.getLastColumn();
+  var keyCurName = 'Currency_Rates';
+  var format1 = "#,##0.00\ [$ uah]"
+  var format2 = "$ #,##0.00"
+  var format3 = "€ #,##0.00"
+  var format4 = "₸ #,##0.00"
+  var format5 = "[$ ₪-he-IL] #,##0.00"
+  var format6 = "[$£-en-GB] #,##0.00"
+  var format7 = "$AU #,##0.00"
+  var format8 = "zł #,##0.00"
+  var currencyName = 'Change_Currency';
+  var startRow;
+     var data=shts.getRange(1,1,shts.getLastRow(),shts.getLastColumn()).getValues()
+          // --------------------find index Row--------------------
+    for(let i = 0;i < data.length;i++){
+        if(data[i].indexOf(currencyName)!==-1){ 
+          startRow=i+1;
+          break
+        }
+    }
+    Logger.log("startRow" + startRow)
+        // --------------------find index Column--------------------
+    var dataCol = shts.getRange(startRow,1,shts.getLastRow(),shts.getLastColumn()).getValues()[0];
+    var startCol = dataCol.indexOf(currencyName)+2;
+    Logger.log("startCol "+startCol) 
+    var curr = shts.getRange(startRow,startCol).getValue()
+    // Logger.log(curr)
+    Logger.log(curr)
+    Logger.log("lcol "+lcol)
+    Logger.log("lr "+ lr)
+    for(var i = 1;i < lcol;i++){
+        if(sheet.getRange(2,i).getValue()==keyCurName){
+
+          sheet.getRange(2, i, lr);
+          if(curr == "UAH"){
+            sheet.getRange(2, i, lr).setNumberFormat(format1);
+            } 
+            else if (curr == "USD"){
+            sheet.getRange(2, i, lr).setNumberFormat(format2);
+            }
+            else if(curr == "EUR"){
+            sheet.getRange(2, i, lr).setNumberFormat(format3);
+            }
+            else if(curr == "KZT"){
+            sheet.getRange(2, i, lr).setNumberFormat(format4);
+            }
+            else if(curr == "ILS"){
+            sheet.getRange(2, i, lr).setNumberFormat(format5);
+            }
+            else if(curr == "GBP"){
+            sheet.getRange(2, i, lr).setNumberFormat(format6);
+            }
+            else if(curr == "AUD"){
+            sheet.getRange(2, i, lr).setNumberFormat(format7);
+            }  
+            else if(curr == "PLN"){
+            sheet.getRange(2, i, lr).setNumberFormat(format8);
+            }             
+          // sheet.getRange(2, i).clear();
+        }
+    }
+
+
+}
+function Currency_Summary(NameSheet){
+  var sht = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var sheet = SpreadsheetApp.getActive().getSheetByName("Total");
+  var lr=sht.getLastRow();
+  var lcol=sht.getLastColumn();
+  var keyCurName = 'Currency_Rates';
+  var format1 = "#,##0.00\ [$ uah]"
+  var format2 = "$ #,##0.00"
+  var format3 = "€ #,##0.00"
+  var format4 = "₸ #,##0.00"
+  var format5 = "[$ ₪-he-IL] #,##0.00"
+  var format6 = "[$£-en-GB] #,##0.00"
+  var format7 = "$AU #,##0.00"
+  var format8 = "zł #,##0.00"
+  var currencyName = 'Change_Currency';
+    var startRow;
+     var data=sheet.getRange(1,1,sheet.getLastRow(),sheet.getLastColumn()).getValues()
+          // --------------------find index Row--------------------
+    for(let i = 0;i < data.length;i++){
+        if(data[i].indexOf(currencyName)!==-1){ 
+          startRow=i+1;
+          break
+        }
+    }
+    Logger.log("startRow" + startRow)
+        // --------------------find index Column--------------------
+    var dataCol = sheet.getRange(startRow,1,sheet.getLastRow(),sheet.getLastColumn()).getValues()[0];
+    var startCol = dataCol.indexOf(currencyName)+2;
+    Logger.log("startCol "+startCol) 
+    var curr = sheet.getRange(startRow,startCol).getValue()
+    // Logger.log(curr)
+    for(var i = 1;i < lr;i++){
+        if(sht.getRange(i,1).getValue()==keyCurName){
+          // Logger.log("lr"+lr)
+          sht.getRange(i, 1, lr);
+          if(curr == "UAH"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format1);
+            } 
+            else if (curr == "USD"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format2);
+            }
+            else if(curr == "EUR"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format3);
+            }
+            else if(curr == "KZT"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format4);
+            }
+            else if(curr == "ILS"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format5);
+            }
+            else if(curr == "GBP"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format6);
+            }
+            else if(curr == "AUD"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format7);
+            } 
+            else if(curr == "PLN"){
+            sht.getRange(i, 1,1, lcol).setNumberFormat(format8);
+            }              
+          // sheet.getRange(i,1).clear();
+        }
+    }
+
+
+}
+function DeleteRowsInSheet(NameSheet, valuesToDelete) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+  var sheetCh = SpreadsheetApp.getActive().getSheetByName("Media");
+  var typeClient = sheetCh.getRange("BZ1").getValue();
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  var range = sheet.getRange('B1:B' + lastRow);
+  var values = range.getValues();
+  if (typeClient = "standart"){
+    for (var i = values.length - 1; i >= 0; i--) {
+      var cellValue = values[i][0];
+      if (valuesToDelete.indexOf(cellValue) !== -1) {
+        sheet.deleteRow(i + 1); 
+      }
+    }
+    for (var j = lastColumn; j >= 1; j--) {
+    var cellContent = sheet.getRange(9, j, lastRow, 1).getValues();
+    for (var k = 0; k < lastRow; k++) {
+      if (valuesToDelete.indexOf(cellContent[k][0]) !== -1) {
+        sheet.deleteColumn(j);
+        break; 
+      }
+    }
+  }
+  }
+}
