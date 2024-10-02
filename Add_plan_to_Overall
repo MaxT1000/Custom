@@ -1,0 +1,113 @@
+function addPlan() {
+  
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var plan = ss.getSheetByName('Online');
+  var arr = plan.getRange(4, 1, plan.getLastRow(), plan.getLastColumn()).getValues();
+  var colors = plan.getRange(1, 1, plan.getLastRow(), plan.getLastColumn()).getBackgrounds();
+
+  // Загальний список планів
+  var overAllLink = 'https://docs.google.com/spreadsheets/d/1YrQC2meKsxmY21g1VLrMGw5SmWJYc0Dshqbud0FBFyA/edit#gid=264519210'
+  var overAll = SpreadsheetApp.openByUrl(overAllLink).getSheetByName('urls');
+  var curURL = SpreadsheetApp.getActiveSpreadsheet().getUrl();
+  var allPlans = overAll.getRange(2,2,overAll.getLastRow(),1).getValues();
+  var allPlanUrls = overAll.getRange(2,1,overAll.getLastRow(),1);  
+  var isAdded = false;
+  var campaignName = plan.getRange(5,34).getValue();
+
+
+
+  var start_date = checkUnique(arr, 31);
+  var end_date = checkUnique(arr, 32);
+  var advertiser = checkUnique(arr, 33);
+  var campaign_name = checkUnique(arr, 34);
+  var fee_currency_auditor = checkUnique(arr, 40);
+  var campaign_cm = checkUnique(arr, 43);
+  var campaign_cm_id = checkUnique(arr, 44);
+  var connector_auditor_id = hasAnyDuplicate(arr, 48);
+  var kpi1 = checkUnique(arr, 57);
+  var kpi2 = checkUnique(arr, 58);
+  var colorCells = checkColor(colors);
+
+  var statuses = [start_date, end_date, advertiser, campaign_name, fee_currency_auditor, campaign_cm, campaign_cm_id, connector_auditor_id, kpi1, kpi2, (colorCells.length > 0)];
+
+  // Перевіряємо чи є хоча б одна true у масиві статусів
+  if (statuses.some(function(status) { return status; })) {
+    // Виводимо повідомлення в інтерфейс
+    var message = 'Виявлено помилки:\n\n';
+    if (start_date) message += 'Знайдено неунікальні значення: start_date\n';
+    if (end_date) message += 'Знайдено неунікальні значення: end_date\n';
+    if (advertiser) message += 'Знайдено неунікальні значення: advertiser\n';
+    if (campaign_name) message += 'Знайдено неунікальні значення: campaign_name\n';
+    if (fee_currency_auditor) message += 'Знайдено неунікальні значення: fee_currency_auditor\n';
+    if (campaign_cm) message += 'Знайдено неунікальні значення: campaign_cm\n';
+    if (campaign_cm_id) message += 'Знайдено неунікальні значення: campaign_cm_id\n';
+    if (connector_auditor_id) message += 'Виявлено дублікати: connector_auditor_id\n';
+    if (kpi1) message += 'Знайдено неунікальні значення: kpi1\n';
+    if (kpi2) message += 'Знайдено неунікальні значення: kpi2\n';
+    if (colorCells.length > 0) message += 'Знайдено помилки у колонках: ' + colorCells;
+
+    SpreadsheetApp.getUi().alert(message);
+  }else{    
+    var u = 2;   
+    for(planUrl of allPlans){
+      if(planUrl == campaignName){
+        overAll.getRange(u,1).setValue(curURL);
+        isAdded = true;
+        break;
+      }
+      u++;
+    }
+    if(isAdded == false){
+      overAll.getRange(overAll.getLastRow()+1,1,1,2).setValues([[curURL,campaignName]]);
+      SpreadsheetApp.getUi().alert('Ви коректно заповнили план. \n План успішно додано до Overall. \n'+ overAllLink + '\n\n Дякуємо за Вашу роботу!!! ');
+    }else{
+      SpreadsheetApp.getUi().alert('Неможливо додати план до Overall. Перевірте наявність поточного посилання у списку Overall\n'+ overAllLink );
+    }
+
+
+  }
+  Logger.log(statuses)
+  return statuses;
+}
+
+function checkUnique(arr, columnIndex) {
+  var columnValues = arr.map(function (row) {
+    return row[columnIndex - 1].toString();
+  });
+
+  var filteredValues = columnValues.filter(function (value) {
+    return value !== undefined && value !== "";
+  });
+
+  var uniqueValues = Array.from(new Set(filteredValues));
+  Logger.log(uniqueValues)
+  var hasDuplicates = uniqueValues.length > 1;
+  return hasDuplicates;
+}
+function hasAnyDuplicate(arr, columnIndex) {
+  var columnValues = arr.map(function (row) {
+    return row[columnIndex - 1].toString();
+  });
+
+  var filteredValues = columnValues.filter(function (value) {
+    return value !== undefined && value !== "";
+  });
+
+  var uniqueValues = Array.from(new Set(filteredValues));
+  return filteredValues.length > uniqueValues.length;
+}
+function checkColor(colors) {
+
+  var columnsWithRedCells = [];
+
+  for (var j = 0; j < colors[0].length; j++) {
+    for (var i = 0; i < colors.length; i++) {
+      if (colors[i][j] == "#ff0000") {
+        columnsWithRedCells.push(j + 1);  // Додаємо номер колонки, де є червоні комірки
+        break;  // Виходимо з циклу, якщо знайдено червону комірку в даній колонці
+      }
+    }
+  }
+  Logger.log("columnsWithRedCells "+columnsWithRedCells)
+  return columnsWithRedCells;
+}
