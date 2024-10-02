@@ -1,0 +1,263 @@
+//--------------------static-------------------
+
+const token = "id_token";     
+const telegramUrl = "https://api.telegram.org/bot" + token;
+const webAppUrl = "https://script.google.com/macros/s/id/exec";; // 
+const ssId = "idTable";      // Наша таблиця відповідей
+const adminID = "admin_id";
+const sheetQuestion = SpreadsheetApp.openById(ssId).getSheetByName("Question")
+const sheetAnswers = SpreadsheetApp.openById(ssId).getSheetByName("Answers")
+const sheetUserQuestions = SpreadsheetApp.openById(ssId).getSheetByName("UserQuestions")
+const sheetArchive = SpreadsheetApp.openById(ssId).getSheetByName("Statistics")
+const ssbase ="base_id"
+const sheetbase = SpreadsheetApp.openById(ssbase).getSheetByName("archive")
+const sheetHr = SpreadsheetApp.openById(ssbase).getSheetByName("Question")
+
+//--------------------Webhook-------------------
+
+function setWebhook() {
+  try {
+    var url = telegramUrl + "/setWebhook?url=" + webAppUrl;
+    var response = UrlFetchApp.fetch(url); 
+    var responseData = JSON.parse(response.getContentText());
+
+    if (responseData.ok) {
+      Logger.log('Webhook successfully set.');
+    } else {
+      Logger.log('Error setting webhook: ' + responseData.description);
+    }
+  } catch (e) {
+    Logger.log('Exception setting webhook: ' + e);
+  }
+}
+function getWebhookInfo() {
+  var url = telegramUrl + "/getWebhookInfo";
+  var response = UrlFetchApp.fetch(url);
+  if( response.getResponseCode() == 200){
+    var data = JSON.parse(response.getContentText())
+    Logger.log("Currrent webhook url is " + data .result.url)
+  }else{
+    Logger.log("telegram response status is " + response.getResponseCode())
+  }
+  
+}
+//--------------------bot_send-------------------
+const numbersQuetions = 7;
+
+function doGet(e) {
+  return HtmlService.createHtmlOutput("Hi there");
+}
+
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var text = data.message.text;
+    var chatId = data.message.chat.id;
+    var name = data.message.chat.first_name + " " + data.message.chat.last_name;
+
+    if (text === '/start') {
+      processCommand(text, chatId, name);
+    } else {
+      var currentQuestion = getCurrentQuestion(chatId);
+      if (currentQuestion !== -1) {
+        var questionText = getQuestionText(currentQuestion);
+        sheetAnswers.appendRow([new Date(), chatId, name, questionText, text]);
+
+        // Переходимо до наступного питання для користувача
+        setUserQuestion(chatId, currentQuestion + 1);
+
+        if (currentQuestion + 1 <= numbersQuetions) {
+          // Виводимо наступне питання
+          var questionTextNext = getQuestionText(currentQuestion + 1);
+          var options = getQuestionOptions(currentQuestion + 1);
+          sendQuestionWithKeyboard(chatId, questionTextNext, options);
+        } else {
+          // Опитування завершено
+          sendText(chatId, "Дякуємо за відповіді! Опитування завершено.");
+          setUserQuestion(chatId, -1);
+        }
+      } else {
+        sendText(chatId, "Помилка: Відсутні дані про поточне питання для користувача");
+      }
+    }
+  } catch (e) {
+    sendText(adminID, JSON.stringify(e, null, 4));
+  }
+}
+
+function getCurrentQuestion(chatId) {
+  var userRow = getUserRow(chatId);
+  if (userRow !== -1) {
+    return parseInt(sheetUserQuestions.getRange(userRow, 2).getValue());
+  }
+  return -1;
+}
+
+function setUserQuestion(chatId, questionNumber) {
+  var userRow = getUserRow(chatId);
+
+  if (userRow === -1) {
+    sheetUserQuestions.appendRow([chatId, questionNumber]);
+  } else {
+    sheetUserQuestions.getRange(userRow, 2).setValue(questionNumber);
+  }
+}
+
+function processCommand(text, chatId, name) {
+  var currentQuestion = getCurrentQuestion(chatId);
+
+  if (text === '/start' && currentQuestion === -1) {
+    // Початок опитування
+    currentQuestion = 1;
+    setUserQuestion(chatId, currentQuestion);
+    var questionText = getQuestionText(currentQuestion);
+    var options = getQuestionOptions(currentQuestion);
+    sendQuestionWithKeyboard(chatId, questionText, options);
+  } else if (currentQuestion !== -1) {
+    // Зберігаємо відповідь
+    var questionText = getQuestionText(currentQuestion);
+    sheetAnswers.appendRow([new Date(), chatId, name, questionText, text]);
+
+    // Переходимо до наступного питання для користувача
+    setUserQuestion(chatId, currentQuestion + 1);
+
+    if (currentQuestion + 1 <= numbersQuetions) {
+      // Виводимо наступне питання
+      var questionTextNext = getQuestionText(currentQuestion + 1);
+      var options = getQuestionOptions(currentQuestion + 1);
+      sendQuestionWithKeyboard(chatId, questionTextNext, options);
+    } else {
+      // Опитування завершено
+      sendText(chatId, "Дякуємо за відповіді! Опитування завершено.");
+    }
+  } else {
+    sendText(chatId, "Помилка: Опитування вже розпочато.");
+  }
+}
+
+function getQuestionText(questionNumber) {
+  return sheetQuestion.getRange(questionNumber + 1, 1).getValue(); // Колонка 1 містить текст питання
+}
+
+function getQuestionOptions(questionNumber) {
+  if (questionNumber === 1) {
+    return ["😃", "😌", "😐", "🥵", "☠️"];
+  } else if (questionNumber >= 2 && questionNumber <= 3) {
+    return Array.from({ length: 10 }, function(_, i) { return (10 - i).toString(); });// сортування від 10
+  } else {
+    return [];
+  }
+}
+
+function sendQuestionWithKeyboard(chatId, questionText, options) {
+  var keyboard = {
+    keyboard: options.map(function(option) { return [{ text: option }]; }),
+    one_time_keyboard: true,
+    resize_keyboard: true
+  };
+
+  // var message = "Question:\n" + questionText;
+  var message = "\n" + questionText;
+
+  var url = telegramUrl + "/sendMessage";
+  var payload = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      chat_id: chatId,
+      text: message,
+      reply_markup: keyboard
+    })
+  };
+
+  UrlFetchApp.fetch(url, payload);
+}
+
+function sendText(chatId, text) {
+  var url = telegramUrl + "/sendMessage";
+  var payload = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      chat_id: chatId,
+      text: text
+    })
+  };
+
+  UrlFetchApp.fetch(url, payload);
+}
+
+function getUserRow(chatId) {
+  var userColumn = sheetUserQuestions.getRange(1, 1, sheetUserQuestions.getLastRow(), 1).getValues().flat().indexOf(chatId);
+  if (userColumn !== -1) {
+    return userColumn + 1;
+  }
+  return -1;
+}
+
+//--------------------archive-------------------
+
+function archiveData() {
+  var lastRow = sheetAnswers.getLastRow();
+  var lastColumn = sheetAnswers.getLastColumn();
+  var dataToCopy = sheetAnswers.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+
+  for (var i = 0; i < dataToCopy.length; i++) {
+    var dateValue = dataToCopy[i][0]; 
+    var dateObject = new Date(dateValue);
+    
+    dataToCopy[i] = [
+      dateObject.getDate(),
+      dateObject.getMonth() + 1, 
+      dateObject.getFullYear(),
+      ...dataToCopy[i] // Залишаємо інші значення без змін
+    ];
+  }
+
+  sheetArchive.getRange(sheetArchive.getLastRow() + 1, 1, dataToCopy.length, dataToCopy[0].length).setValues(dataToCopy);
+  // додаємо дані до бази
+  var dataToAppend = dataToCopy.map(function(row) {
+    return [row[0], row[1], row[2], row[3], row[4], row[6], row[7]];
+  });
+  var sheetbaseArr = sheetbase.getRange("A2:A").getValues();
+  var sheetbaselRow = sheetbaseArr.filter(String).length
+  sheetbase.getRange(sheetbaselRow + 1, 1, dataToAppend.length, dataToAppend[0].length).setValues(dataToAppend);
+
+  var userQuestionsData = sheetUserQuestions.getRange("A2:B").getValues();
+
+  var lr = userQuestionsData.filter(function(row) {
+    return row[0] !== "";
+  }).length;
+
+  // Встановлюємо усім значенням в стовпці B значення -1
+  for (var i = 0; i < lr; i++) {
+    sheetUserQuestions.getRange(i + 2, 2).setValue(-1);
+  }
+
+  sheetAnswers.getRange(2, 1, lastRow - 1, lastColumn).clearContent();
+}
+
+//--------------------reminder-------------------
+
+function reminder() {
+  var users = sheetUserQuestions.getRange("A2:A").getValues();
+
+  var hi = sheetHr.getRange("D2").getValue()
+  var today = new Date();
+  var formattedDate = today.toISOString().split('T')[0];
+  var statArc = [[formattedDate, hi]]
+  var lRow = users.filter(String).length
+  Logger.log("hi "+ hi)
+  for (var i = 0; i < lRow; i++) {
+    try {
+      Logger.log("Sending message to user " + users[i][0]);
+      sendText(users[i][0], hi);
+      Utilities.sleep(1000);
+    } catch (error) {
+      Logger.log("Error sending message to user " + users[i][0] + ": " + error);
+    }
+  }
+
+  sheetHr.getRange(sheetHr.getLastRow() + 1, 1, 1, statArc[0].length).setValues(statArc);
+}
