@@ -1,0 +1,116 @@
+//----------total GA----------------
+SELECT 
+  channel, 
+  COUNT(client_id) AS UniqueClient, 
+  sum(Users) AS UsersGA, 
+  SUM(newUsers) AS newUsersGA
+FROM(
+  SELECT DISTINCT (client_id), 
+    channel, 
+    SUM(totalusers) AS Users, 
+    SUM(newUsers) AS newUsers
+FROM `tableGa` 
+
+GROUP BY client_id, channel
+)
+GROUP BY channel
+ORDER BY channel 
+
+//----------total ConversionsGA----------------
+SELECT 
+  channel, 
+  SUM(ConversionsGA) AS ConversionsGA 
+FROM(
+  SELECT DISTINCT (client_id), 
+    channel, 
+    SUM(eventCount) AS ConversionsGA 
+FROM `tableConversionsGA` 
+
+GROUP BY client_id, channel
+order by channel
+)
+GROUP BY channel
+order by channel
+//----------total GA----------------
+WITH CM AS (
+  SELECT 
+    MIN(date(Date)) as dateCM, 
+    client_id AS clientIDCM
+  FROM 
+    `table_auditor`
+  WHERE 
+  Campaign = 'camp'
+  GROUP BY
+    client_id,
+    campaign
+),
+ga_cm_client_id_compare AS (
+  SELECT 
+    * 
+  FROM 
+    `table_ga` GA
+  LEFT JOIN CM ON 
+    GA.client_ID=CM.clientIDCM
+    AND GA.date <= CAST(CM.dateCM  AS STRING)
+  WHERE 
+    clientIDCM IS NOT null AND clientIDCM not in ('.', 'other', '(not set)')
+)
+SELECT 
+  channel, 
+  COUNT(client_id) AS UniqueClient,
+  SUM(Users) AS UsersGA, 
+  SUM(newUsers) AS newUsersGA,
+FROM(
+  SELECT 
+    DISTINCT (client_id), 
+    channel, 
+    SUM(totalusers) AS Users, 
+    SUM(newUsers) AS newUsers
+  FROM 
+    ga_cm_client_id_compare
+  GROUP BY 
+    client_id, channel
+)
+GROUP BY 
+  channel
+ORDER BY
+  channel
+//----------check----------------
+WITH GA AS (
+    SELECT DISTINCT client_id AS client_id_GA
+    FROM `ga`
+    
+),
+CM AS (
+    SELECT DISTINCT
+        client_id client_id_CM
+    FROM `auditor`
+),
+Total AS (
+    SELECT client_id_GA AS client_id FROM GA
+    UNION ALL
+    SELECT client_id_CM FROM CM
+)
+SELECT 
+Count(Total_client) AS TotalClients,
+SUM(CASE
+      WHEN GA_client_id='not_found' THEN 1 ELSE 0
+    END) AS GA,
+SUM(CASE 
+      WHEN CM_client_id='not_found' THEN 1 ELSE 0
+    END) AS CM 
+    FROM(
+SELECT DISTINCT
+    Total.client_id AS Total_client,
+    COALESCE(GA.client_id_GA, 'not_found') AS GA_client_id,
+    COALESCE(CM.client_id_CM, 'not_found') AS CM_client_id
+FROM Total
+LEFT JOIN GA
+    ON Total.client_id = GA.client_id_GA
+LEFT JOIN CM
+    ON Total.client_id = CM.client_id_CM
+ORDER BY Total_client)
+
+//----------total GA----------------
+//----------total GA----------------
+//----------total GA----------------
