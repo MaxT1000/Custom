@@ -1,0 +1,298 @@
+const linkCell = 65
+const cheefCell = 66
+function onChange(e) {
+
+    var linkUrl = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getRange(linkCell, 4).getValue();
+    var okCheef = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getRange(cheefCell, 4).getValue();
+    if (linkUrl !== "" && okCheef == true) {
+      Logger.log("Conditions = TRUE")
+      CustomNumberFormat();
+      Calculation();
+    }
+
+}
+function Calculation() {
+  // var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var UrlStatusFile = sheet.getRange(linkCell, 4).getValue()
+  var Ok = sheet.getRange(cheefCell, 4).getValue()
+  Logger.log('Ok = ' + Ok)
+  if (UrlStatusFile == "") {
+    SpreadsheetApp.getUi().alert('Додайте посилання на статус файл')
+  }
+  if (Ok == false) {
+    SpreadsheetApp.getUi().alert('Калькулятор не узгоджений з керівником')
+  }
+  else if (UrlStatusFile !== "" && Ok == true) {
+    Logger.log("UrlStatusFile "+ UrlStatusFile)
+    ssNew = SpreadsheetApp.openByUrl(UrlStatusFile)
+    var NoSheet = ssNew.getSheetByName('Cooperation terms');
+    if (NoSheet) {
+      SpreadsheetApp.getUi().alert('У статус файлі вже є калькулятор')
+      Logger.log('вже є умови = ')
+    }
+    else if (!NoSheet) {
+      Logger.log('Ok = ' + "гуд")
+      var NameTeam = sheet.getName()
+      var TimeSheet = NameTeam + "_Time"
+      if (ss.getSheetByName(TimeSheet).isSheetHidden()) {
+        Logger.log('Hidden = ' + TimeSheet)
+        ss.getSheetByName(TimeSheet).showSheet()
+      }
+      Logger.log('TimeSheet = ' + TimeSheet)
+      ss.getSheetByName(NameTeam).copyTo(ssNew).setName("Cooperation terms")
+      ss.getSheetByName(TimeSheet).copyTo(ssNew).setName("Time")
+      var timeSheet = ss.getSheetByName(TimeSheet);
+      var targetSheet = ssNew.getSheetByName("Time");
+      var time_range = timeSheet.getRange(1, 2, 11, 1).getValues();
+      var cost_range = timeSheet.getRange(1, 4, 11, 1).getValues();
+      targetSheet.getRange(1, 2, 11, 1).setValues(time_range);
+      targetSheet.getRange(1, 4, 11, 1).setValues(cost_range);
+      ss.getSheetByName(TimeSheet).hideSheet()
+      //-----------replace formulas -------------------- 
+      var range = targetSheet.getRange("C2:C11");
+      var datatime = range.getFormulas();
+
+      for (var row = 0; row < datatime.length; row++) {
+        for (var col = 0; col < datatime[row].length; col++) {
+          datatime[row][col] = (datatime[row][col]).toString().replace(NameTeam, "'Cooperation terms'");
+        }
+      }
+      range.setFormulas(datatime);
+      var formula = ssNew.getSheetByName("Cooperation terms").getRange(26, 4).getFormula()
+      var newform = formula.toString().replace(TimeSheet, "Time")
+      Logger.log('newform = ' + newform)
+      ssNew.getSheetByName("Cooperation terms").getRange(26, 4).setFormula(newform)
+      var track = ssNew.getSheetByName("Cooperation terms").getRange(38, 4)
+      track.copyTo(track,SpreadsheetApp.CopyPasteType.PASTE_VALUES, true)
+      ssNew.getSheetByName("Cooperation terms").deleteRows(60, 5)// delete own part
+
+      ssNew.getSheetByName("Cooperation terms").getRange(5, 4).clearDataValidations()
+      ssNew.getSheetByName("Cooperation terms").getRange(1,1,1,10).clearDataValidations()
+      ssNew.getSheetByName("Cooperation terms").getRange(1,1,1,10).clear()
+      ssNew.getSheetByName("Time").hideSheet()
+      SpreadsheetApp.flush();
+      Utilities.sleep(5000)
+      CopyToTotal(NameTeam)
+
+      ss.getSheetByName(NameTeam).getRange(linkCell, 4).setValue("False")
+      ss.getSheetByName(NameTeam).getRange(linkCell, 4, 2).clearContent()
+      Logger.log('NameTeam = ' + NameTeam)
+    }
+
+  }
+ 
+}
+function CopyToTotal(NameSheet) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName('Total');
+  var lock = LockService.getScriptLock();
+  var success = lock.tryLock(2000);
+  if (!success) {
+    Logger.log("script used another users")
+    return
+  } else {
+    var lr = sheet.getLastRow();
+    sheet.getRange(lr + 1, 1).activate();
+    var sheetTeam = SpreadsheetApp.getActive().getSheetByName(NameSheet);
+    var currTeam = sheetTeam.getRange("C1").getValue();
+    var formatUAH = "₴ #,##0.00"
+    var formatUSD = "$ #,##0.00"
+    var formatEUR = "€ #,##0.00"
+    var formatKZT = "₸ #,##0.00"
+    
+    sheetTeam.getRange("D5:D28").copyTo(sheet.getRange(lr + 1, 2, 1, 21), SpreadsheetApp.CopyPasteType.PASTE_VALUES, true);
+    sheetTeam.getRange("D36:D38").copyTo(sheet.getRange(lr + 1, 27, 1, 3), SpreadsheetApp.CopyPasteType.PASTE_VALUES, true);
+    sheetTeam.getRange("D63:D66").copyTo(sheet.getRange(lr + 1, 31, 1, 3), SpreadsheetApp.CopyPasteType.PASTE_VALUES, true);
+    var rangeBying = sheet.getRange(lr + 1,21,1,2)
+    var rangeTracking = sheet.getRange(lr + 1,28)
+    if(currTeam == "UAH"){
+      rangeBying.setNumberFormat(formatUAH)
+      rangeTracking.setNumberFormat(formatUAH)
+      }
+      else if(currTeam == "USD"){
+      rangeBying.setNumberFormat(formatUSD)
+      rangeTracking.setNumberFormat(formatUSD)
+      }
+      else if(currTeam == "EUR"){
+      rangeBying.setNumberFormat(formatEUR)
+      rangeTracking.setNumberFormat(formatEUR)
+      }
+      else if(currTeam == "KZT"){
+      rangeBying.setNumberFormat(formatKZT)
+      rangeTracking.setNumberFormat(formatKZT)
+      }
+    sheet.getRange(lr + 1, 1).setValue(NameSheet)
+    Today = Utilities.formatDate(new Date(), "GMT+1", "dd/MM/yyyy")
+    sheet.getRange(lr + 1, 36).setValue(Today)
+  }
+  lock.releaseLock()
+}
+
+function CustomNumberFormat() {
+
+  var SS = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var NameSh = sheet.getName()
+  Logger.log("NameSh = " + NameSh)
+  var NameTime = NameSh + "_Time"
+  Logger.log("NameTime = " + NameTime)
+  var ss = SS.getSheetByName(NameTime);
+  var ss1 = SS.getSheetByName(NameSh);
+
+  var range1 = ss.getRange("D2:E12");
+  var range2 = ss1.getRange("D25:D32");
+  var range3 = ss1.getRange("D37:D39");
+  var curr = ss1.getRange("C1").getValue()
+  Logger.log("currency = " + curr)
+
+  var format1 = "₴ #,##0.00"
+  var format2 = "$ #,##0.00"
+  var format3 = "€ #,##0.00"
+  var format4 = "₸ #,##0.00"
+
+  if(curr == "UAH"){
+    range1.setNumberFormat(format1);
+    range2.setNumberFormat(format1);
+    range3.setNumberFormat(format1);
+    } 
+    else if (curr == "USD"){
+    range1.setNumberFormat(format2);
+    range2.setNumberFormat(format2);
+    range3.setNumberFormat(format2);
+    }
+    else if(curr == "EUR"){
+    range1.setNumberFormat(format3);
+    range2.setNumberFormat(format3);
+    range3.setNumberFormat(format3);
+    }
+    else if(curr == "KZT"){
+    range1.setNumberFormat(format4);
+    range2.setNumberFormat(format4);
+    range3.setNumberFormat(format4);
+    }
+
+
+}
+
+function replaceFormula() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var range = sheet.getRange("F1:F" + sheet.getLastRow());
+  var data = range.getValues();
+  var formulas = range.getFormulas();
+  for (var i = 0; i < formulas.length; i++) {
+    if (typeof formulas[i] !== "undefined" && formulas[i] != "") {
+      formulas[i][0] = formulas[i][0].replace(/['Alpha']/gi, "Saturn");
+      data[i][0] = formulas[i][0].toString();
+    }
+  }
+  range.setValues(data).setNumberFormat("0");
+}
+function Today() {
+  Today = Utilities.formatDate(new Date(), "GMT+1", "dd/MM/yyyy")
+}
+function OldCalculation() {
+  // var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('total');
+  var lr = sheet.getLastRow();
+  //---------------name client and name campaign ----------------------------------------------
+  var data = sheet.getRange(2, 1, lr, 5).getValues();
+  Logger.log('data = ' + data[1][2])
+  for (i = 0; i < data.length; i++) {
+    if (data[i][2] == "" && data[i][0] !== "") {
+      var name_client = data[i][0];
+      var name_campaign = data[i][1];
+      var indexURL = i + 2
+      break
+    }
+  }
+  if (indexURL > 0) {
+    sheet.getRange(indexURL, 6, 1, 20).copyTo(sheet.getRange(indexURL, 6, 1, 20), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+    Logger.log('name_client = ' + name_client)
+    Logger.log('name_campaign = ' + name_campaign)
+    Logger.log('indexURL = ' + indexURL)
+
+    // --------------------add link client version--------------------
+    var crNew = SpreadsheetApp.create("newage." + "_Сalculation_" + name_client + "_" + name_campaign);// creat new spreadsheet
+    var ssNew = SpreadsheetApp.openByUrl(crNew.getUrl());
+    sheet.getRange(indexURL, 3).setValue(ssNew.getUrl());
+    // --------------------copy to client version--------------------  
+    ss.getSheetByName("Cooperation terms").copyTo(ssNew).setName("Cooperation terms");
+    ss.getSheetByName("Time").copyTo(ssNew).setName("Time");
+    var timeSheet = ss.getSheetByName("Time");
+    var targetSheet = ssNew.getSheetByName("Time");
+    var time_range = timeSheet.getRange(1, 2, 11, 1).getValues();
+    var cost_range = timeSheet.getRange(1, 4, 11, 1).getValues();
+    targetSheet.getRange(1, 2, 11, 1).setValues(time_range);
+    targetSheet.getRange(1, 4, 11, 1).setValues(cost_range);
+    Logger.log('time_range = ' + time_range)
+    Logger.log('cost_range = ' + cost_range)
+    var formula = ssNew.getSheetByName("Cooperation terms").getRange(26, 3).getFormula()
+    ssNew.getSheetByName("Cooperation terms").getRange(26, 3).setFormula(formula)
+    SpreadsheetApp.setActiveSpreadsheet(ssNew)
+    DelSheet("Лист1")
+
+  }
+  else
+    SpreadsheetApp.getUi().alert('Не знайден клієнт та кампанія без калькулятору! Додайте клієнта та кампанію')
+}
+
+function DelSheet(name) {
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName(name);
+  ss.deleteSheet(sheet);
+}
+
+function removeAccents() {
+  var spreadsheet = SpreadsheetApp.getActive();
+  var range = spreadsheet.getRange("F3:F");
+  var data = range.getFormulas();
+
+  for (var row = 0; row < data.length; row++) {
+    for (var col = 0; col < data[row].length; col++) {
+      data[row][col] = (data[row][col]).toString().replace("Alpha", "Saturn");
+    }
+  }
+  range.setFormulas(data);
+};
+
+function Search_Calculation() {
+  
+  
+  var linkUrl = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getRange("C45").getValue();
+  var okCheef = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getRange("C46").getValue();
+  if (linkUrl !== "" && okCheef == true) {
+ // var TimeStart = new Date().getTime();//start tracking timer
+  var ss = SpreadsheetApp.getActiveSpreadsheet(); // active sheet from script
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var UrlStatusFile = linkUrl
+  var Ok = okCheef
+  Logger.log('Ok = ' + Ok)
+  if (UrlStatusFile == "") {
+    SpreadsheetApp.getUi().alert('Додайте посилання на статус файл')
+  }
+  if (Ok == false) {
+    SpreadsheetApp.getUi().alert('Калькулятор не узгоджений з керівником')
+  }
+  else if (UrlStatusFile !== "" && Ok == true) {
+    ssNew = SpreadsheetApp.openByUrl(UrlStatusFile)
+    var NoSheet = ssNew.getSheetByName('Search_Calculation');
+    if (NoSheet) {
+      SpreadsheetApp.getUi().alert('У статус файлі вже є калькулятор')
+      Logger.log('вже є умови = ')
+    }
+    else if (!NoSheet) {
+      Logger.log('Ok = ' + "гуд")
+      var NameTeam = sheet.getName()
+      ss.getSheetByName(NameTeam).copyTo(ssNew).setName("Search_Calculation")
+      ssNew.getSheetByName("Search_Calculation").deleteRows(44, 3)// delete own part
+      var drawings = ssNew.getSheetByName("Search_Calculation").getDrawings();
+      drawings[0].remove()
+      ss.getSheetByName(NameTeam).getRange("C46").setValue("False")
+      ss.getSheetByName(NameTeam).getRange("C45").clearContent()
+      Logger.log('NameTeam = ' + NameTeam)
+    }
+
+  }
