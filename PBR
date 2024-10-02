@@ -1,0 +1,242 @@
+function getPlanSummary() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var shinput = spreadsheet.getSheetByName("TotalInput");
+  var planDataSheet = spreadsheet.getSheetByName("PlanData");
+  var mediash = spreadsheet.getSheetByName("Media");
+  var shDays = spreadsheet.getSheetByName("Dynamics by day")
+  var shYT = spreadsheet.getSheetByName("Placements (YouTube)")
+  var shNonYT = spreadsheet.getSheetByName("Placements (Banner)")
+  var ssplanUrl = shinput.getRange("B9").getValue();
+  var ssplanUrl1 = shinput.getRange("B10").getValue();
+  
+  var ssplan = SpreadsheetApp.openByUrl(ssplanUrl);
+  var shplan = ssplan.getSheetByName("Media Summary");
+  
+  var ssplan1 = SpreadsheetApp.openByUrl(ssplanUrl1);
+  var shplan1 = ssplan1.getSheetByName("Media Summary");
+  var onlineSheet = ssplan1.getSheetByName("Online");
+  
+  
+  //------------check summary sheet-------------------------
+    shinput.getRange("C9:D10").clearContent()
+    if (!shplan) {
+      shinput.getRange("C9").setValue("Вкладка 'Media Summary' у "+shinput.getRange("A9").getValue()+" не знайдена!");
+      return;
+    }
+    if (!shplan1) {
+      shinput.getRange("C10").setValue("Вкладка 'Media Summary' у "+shinput.getRange("A10").getValue()+" не знайдена!");
+      return;
+    }
+    if (!onlineSheet) {
+      shinput.getRange("D10").setValue("Вкладка 'Online' не знайдена.");
+      return;
+    }
+  // -----------get campaign name----------------------
+    getCampaignName(onlineSheet,shinput)
+    var camp_name = shinput.getRange("B1").getValue();
+  // -----------get data from plans--------------
+    var dataPlan = shplan.getRange(8, 2, shplan.getLastRow() - 7, shplan.getLastColumn() - 1).getValues();
+    var dataPlan1 = shplan1.getRange(8, 2, shplan1.getLastRow() - 7, shplan1.getLastColumn() - 1).getValues();
+    Logger.log(dataPlan1)
+
+    
+    var dataInput = shinput.getRange(14, 2, shinput.getLastRow() - 13, 1).getValues();
+
+    if(shinput.getLastColumn()>3){
+      shinput.getRange(13, 4, shinput.getLastRow() - 12, shinput.getLastColumn()-3).clearContent();
+    }
+
+    var results = [];
+    var results1 = [];
+  // -----------'Total initial plan'----------------
+    for (var i = 0; i < dataInput.length; i++) {
+      var inputValue = dataInput[i][0];
+      var found = false;
+      for (var j = 0; j < dataPlan.length; j++) {
+        if (dataPlan[j][0] === inputValue) {
+          var totalColumnIndex = dataPlan[0].indexOf("TOTAL");
+          Logger.log("totalColumnIndex"+totalColumnIndex)
+          var planValue = dataPlan[j][totalColumnIndex];
+          results.push([planValue]);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        results.push(["not found in plan"]);
+      }
+    }
+  
+  // -----------'Total final plan'----------------
+    
+    for (var i = 0; i < dataInput.length; i++) {
+            var inputValue = dataInput[i][0];
+            var found = false;
+            var rowData = [];
+            
+            var headers = ['Total final plan']; // Додали заголовок
+            for (var j = 0; j < dataPlan1.length; j++) {
+                if (dataPlan1[j][0] === inputValue) {
+                    var totalColumnIndex1 = dataPlan1[0].indexOf("TOTAL");
+                    rowData.push(dataPlan1[j][totalColumnIndex1]);
+
+
+                    for (var k = 1; k < totalColumnIndex1; k++) {
+                        rowData.push(dataPlan1[j][k]);
+                        headers.push(dataPlan1[0][k]); // Додали заголовки
+                        Logger.log("headers"+headers)
+                    }
+                    
+                    found = true;
+                    break;
+                }
+              
+            }
+            
+            if (!found) {
+            // Додаємо "not found in plan" до rowData
+            for (var k = 0; k < totalColumnIndex1; k++) {
+                rowData.push("not found in plan");
+            }
+        }
+            
+            results1.push(rowData);
+    }
+  // -----------add to TotalInput-----------------------
+    var outputRange = shinput.getRange(14, 3, results.length, 1);
+    outputRange.setValues(results);
+    var outputheaders = shinput.getRange(13, 4, 1, headers.length);
+    Logger.log("headers.length"+headers.length)
+    outputheaders.setValues([headers]);
+    Logger.log("[headers]"+[headers])
+    Logger.log("results1.length"+results1.length)
+    Logger.log("results1[0].length"+results1[0].length)
+    Logger.log("results1"+results1)
+    var outputRange1 = shinput.getRange(14, 4, results1.length, results1[0].length);
+    outputRange1.setValues(results1);
+
+
+  // -----------add to PlanData-----------------
+    var dataOnline = onlineSheet.getDataRange().getValues();
+    // replace dots to commas  
+      var columnsToReplace = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 55, 56, 59];
+      dataOnline = dataOnline.map(function(row) {
+        return row.map(function(cell, index) {
+          if (columnsToReplace.indexOf(index + 1) !== -1 && cell !== "") {
+            return cell.toString().replace(".", ",");
+          } else {
+            return cell;
+          }
+        });
+      });
+    
+    if(planDataSheet.getLastRow()>1){
+      planDataSheet.getRange(1,1,planDataSheet.getLastRow()-1,planDataSheet.getLastColumn()-1).clearContent()
+    }
+    var planDataRange = planDataSheet.getRange(1, 1, dataOnline.length, dataOnline[0].length);
+    planDataRange.setValues(dataOnline);
+  // -----------add to Media---------------
+  
+  
+    try {
+
+      var data_site = siteSQLQuery(camp_name);
+      if(data_site.length>0){
+        mediash.getRange(5,1,mediash.getLastRow()-4,mediash.getLastColumn()).clearContent()
+      }
+      mediash.getRange(6,1,data_site.length, data_site[0].length).setValues(data_site)
+    } catch (error) {
+      Logger.log("siteSQLQuery" + error)
+    }
+
+    try {
+
+      var data_placement = placementSQLQuery(camp_name);
+      mediash.getRange(26,1,data_placement.length, data_placement[0].length).setValues(data_placement)
+      mediash.getRange(25,1).setValue("Details by segment")
+
+    } catch (error) {
+      Logger.log("placementSQLQuery" + error)
+    }
+    try {
+
+      var data_camp = campSQLQuery(camp_name);
+      mediash.getRange(5,1,data_camp.length, data_camp[0].length).setValues(data_camp)
+
+    } catch (error) {
+      Logger.log("campSQLQuery" + error)
+    }
+  // -----------update formats on Media----------
+    try {
+        for (var i = 4; i < data_site[0].length; i += 3) {
+            mediash.getRange(2, i, mediash.getLastRow(), 1).setNumberFormat("0%");
+        }
+        mediash.getRange(5, 8, mediash.getLastRow(), 2).setNumberFormat("0%");
+        mediash.getRange(5, 26, mediash.getLastRow(), 1).setNumberFormat("0.00%");
+      } catch (error) {
+        Logger.log("update formats on Media" + error)
+      }  
+  // -----------add to Dynamics by day-------------------
+    var data_site_days = siteDaysSQLQuery(camp_name);
+    shDays.getRange(7,1,data_site_days.length, data_site_days[0].length).setValues(data_site_days)
+    var sitesHeaders = data_site_days[0].map(header => header.replace(/_Impressions_AdServer|_Budget_AdServer/g, ''));
+
+    var metricsHeaders = data_site_days[0].map(header => {
+          if (header.includes('_Impressions_AdServer')) {
+            return 'Impr_AdServer';
+          } else if (header.includes('_Budget_AdServer')) {
+            return 'Budget_AdServer';
+          } else {
+            return header; 
+          }
+        });
+
+    shDays.getRange(6, 1, 1, data_site_days[0].length).setValues([sitesHeaders]);
+    shDays.getRange(7, 1, 1, data_site_days[0].length).setValues([metricsHeaders]);
+  // -----------add to Channels TOP 100-------------------
+    
+    try {
+
+          var data_channels = channelsYoutubeQuery(camp_name);
+          if(data_channels.length>0){
+            shYT.getRange(8,1,shYT.getLastRow()-1,shYT.getLastColumn()).clearContent()
+          }
+          shYT.getRange(8,1,data_channels.length, data_channels[0].length).setValues(data_channels)
+          shYT.getRange(8,3,data_channels.length, 1).setNumberFormat("0.00%")
+          shYT.getRange(8,6,data_channels.length, 1).setNumberFormat("0.00%")
+        Logger.log("data_channels.length"+data_channels.length)
+        } catch (error) {
+          Logger.log("channelsYoutubeQuery" + error)
+        }
+  // -----------add to Placement/Apps TOP 100-------------------
+    
+    try {
+
+          var data_channels = placeNonYoutubeQuery(camp_name);
+          if(data_channels.length>0){
+            shNonYT.getRange(8,1,shNonYT.getLastRow()-1,shNonYT.getLastColumn()).clearContent()
+          }
+          shNonYT.getRange(8,1,data_channels.length, data_channels[0].length).setValues(data_channels)
+          shNonYT.getRange(8,3,data_channels.length, 1).setNumberFormat("0.00%")
+          shNonYT.getRange(8,6,data_channels.length, 1).setNumberFormat("0.00%")
+        Logger.log("data_channels.length"+data_channels.length)
+        } catch (error) {
+          Logger.log("placeNonYoutubeQuery" + error)
+        }
+}
+
+function getCampaignName(sh,output) {
+
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var columnIndex = headers.indexOf("campaign_name") + 1; 
+
+  if (columnIndex !== 0) {
+    var dataRange = sh.getRange(5, columnIndex, sh.getLastRow() - 4).getValues().flat(); 
+    var uniqueValues = dataRange.filter((value, index, self) => value !== "" && self.indexOf(value) === index); // Фільтруємо лише унікальні значення
+
+    Logger.log(uniqueValues);
+    output.getRange("B1").setValue(uniqueValues)
+  } else {
+    Logger.log("Стовпець 'campaign_name' не знайдено.");
+  }
+}
