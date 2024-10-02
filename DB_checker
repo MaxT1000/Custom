@@ -1,0 +1,243 @@
+function db_checkerQuery() {
+  var projectId = 'project_id'; 
+  
+  var sqlQuery = `
+    WITH TableMetadata AS (
+        SELECT 
+            dataset_id, 
+            table_id, 
+            ROUND(size_bytes/POW(10,9),2) AS size_gb, 
+            FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', TIMESTAMP_MILLIS(creation_time)) AS creation_time, 
+            FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', TIMESTAMP_MILLIS(last_modified_time)) AS last_modified_time,
+            row_count, 
+            CASE 
+                WHEN type = 1 THEN 'table' 
+                WHEN type = 2 THEN 'view' 
+                ELSE NULL 
+            END AS type,
+            EXTRACT(DATE FROM TIMESTAMP_MILLIS(last_modified_time)) AS date_update
+        FROM (
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Admixer\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.DV360\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.FB_Data\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Frequency_CM\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Google_Ads\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.CM_Morning\`.__TABLES__
+            UNION ALL 
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.DV360_Morning\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.TikTok\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Dashboard_Archive_v4\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Dashboard_v4\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Dashboard_v4_dv\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Dashboard_Archive_v4_dv\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Active_dataset\`.__TABLES__
+            UNION ALL
+            SELECT 
+                dataset_id, 
+                table_id, 
+                size_bytes, 
+                creation_time, 
+                last_modified_time,
+                row_count,
+                type
+            FROM \`project_id.Archive\`.__TABLES__
+        )
+    )
+    SELECT 
+        dataset_id, 
+        table_id, 
+        size_gb, 
+        creation_time, 
+        last_modified_time, 
+        date_update, 
+        row_count,
+        type
+    FROM 
+        TableMetadata
+    WHERE 
+        PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', last_modified_time) >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+        AND (date_update < DATE(current_timestamp) OR row_count = 0)
+        AND table_id NOT LIKE "%test%"
+    ORDER BY 
+        date_update;
+
+ `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+          rowData.push(cols[j].v);
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
+function dbCheckerData() {
+  var key = 'idtable'
+  var spreadsheet = SpreadsheetApp.openById(key);
+  var sh = spreadsheet.getSheetByName('UpdateTable');
+  var chatId = "-chatId";; // telegram_chat Campaign + Account Status
+  var script = ScriptApp.getScriptId();
+  var scriptUrl = "https://script.google.com/d/" + script + "/edit"
+  var url = spreadsheet.getUrl()
+  try {
+
+    var data = db_checkerQuery();
+   
+    Logger.log("data[0].length " + data[0])
+    if(data.length>0){
+      sh.getRange(2,1,sh.getLastRow(),8).clearContent()
+    }
+    sh.getRange(2,1,data.length, data[0].length).setValues(data)
+
+  } catch (error) {
+    Logger.log(error)
+     sendTelegramMessage(chatId, "Помилка виконання скрипту: " + arguments.callee.name + "\n" + scriptUrl + "\n" + error)
+  }
+}
