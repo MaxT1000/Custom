@@ -1,10 +1,6 @@
 // Script for create plan for client, reconcilement for client, plan for placement and reconcilement for placement.
 // Version 2.0
 // Date: 03/02/2021
-// Created by Maxim Terescshenko
-// Update 11/04/2024
-// *change name file
-// *delete Package, add function HIDE
 
 function ClientPlan() { // create plan for client
   var TimeStart = new Date().getTime();//start tracking timer
