@@ -240,3 +240,642 @@ function getCampaignName(sh,output) {
     Logger.log("Стовпець 'campaign_name' не знайдено.");
   }
 }
+
+
+
+
+
+//---------------------BQ---------------------------------
+
+function siteSQLQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+      SELECT 
+          DCM_site AS Segment,
+          SUM(Budget_Ads) AS Budget_AdServer,
+          AVG(Budget_Site_Plan) AS Budget_Plan,
+          IFNULL(SUM(Budget_Ads) / NULLIF(AVG(Budget_Site_Plan), 0), 0) AS Budget_Plan_Diff,
+          SUM(Impressions_Ads) AS Impressions_AdServer,
+          AVG(Impressions_Site_Plan) AS Impressions_Plan,
+          IFNULL(SUM(Impressions_Ads) / NULLIF(AVG(Impressions_Site_Plan), 0), 0) AS Impressions_Plan_Diff,
+          SUM(Video_Views_100_Ads) / NULLIF(SUM(Impressions_Ads), 0) AS Full_Views_AdServer,
+          (SUM(Impressions_Plan*Video_Views_100_Plan))/NULLIF(SUM(Impressions_Plan), 0) AS Full_Views_Plan,
+          IFNULL(SUM(Video_Views_100_Ads) / NULLIF((SUM(Impressions_Plan*Video_Views_100_Plan))/NULLIF(SUM(Impressions_Plan), 0), 0), 0) AS Full_Views_Plan_Diff,
+          SUM(User_Reach_Site_Fact)/NULLIF(AVG(connector_counter), 0) AS Reach_Users_Auditor,
+          AVG(User_Reach_Site_Plan) AS Reach_Users_Plan,
+          IFNULL(SUM(User_Reach_Site_Fact)/NULLIF(AVG(connector_counter), 0) / NULLIF(AVG(User_Reach_Site_Plan), 0), 0) AS Reach_Users_Plan_Diff,
+          IFNULL(SUM(Impressions_Ads) / NULLIF(SUM(User_Reach_Site_Fact)/NULLIF(AVG(connector_counter), 0), 0), 0) AS Reach_Users_Auditor_Freq,
+          IFNULL(AVG(Impressions_Site_Plan) / NULLIF(AVG(User_Reach_Site_Plan), 0), 0) AS Reach_Users_Plan_Freq,
+          IFNULL(IFNULL(SUM(Impressions_Ads) / NULLIF(SUM(User_Reach_Site_Fact)/NULLIF(AVG(connector_counter), 0), 0) / NULLIF(AVG(Impressions_Site_Plan) / NULLIF(AVG(User_Reach_Site_Plan), 0), 0), 0), 0) AS Reach_Users_Freq_Diff,
+          SUM(Clicks_Ads) AS Clicks_AdServer,
+          AVG(Clicks_Site_Plan) AS Clicks_Plan,
+          IFNULL(SUM(Clicks_Ads) / NULLIF(AVG(Clicks_Site_Plan), 0), 0) AS Clicks_Plan_Diff,
+          IFNULL(SUM(Budget_Ads) / NULLIF(SUM(Clicks_Ads), 0), 0) AS CPC_Fact,
+          IFNULL(AVG(Budget_Site_Plan) / NULLIF(AVG(Clicks_Site_Plan), 0), 0) AS CPC_Plan,
+          IFNULL((SUM(Budget_Ads) / NULLIF(SUM(Clicks_Ads), 0)) / NULLIF(AVG(Budget_Site_Plan) / NULLIF(AVG(Clicks_Site_Plan), 0), 0), 0) AS CPC_Plan_Diff,
+          IFNULL(SUM(Budget_Ads) / NULLIF(SUM(Impressions_Ads), 0)* 1000, 0) AS CPM_Fact,
+          IFNULL(AVG(Budget_Site_Plan) * 1000 / NULLIF(AVG(Impressions_Site_Plan), 0), 0) AS CPM_Plan,
+          IFNULL((SUM(Budget_Ads) / NULLIF(SUM(Impressions_Ads), 0)* 1000) / NULLIF(AVG(IFNULL(Budget_Site_Plan * 1000 / NULLIF(Impressions_Site_Plan, 0), 0)), 0), 0) AS CPM_Plan_Diff,
+          AVG(IFNULL(Clicks_Ads / NULLIF(Impressions_Ads, 0), 0)) AS CTR_Fact
+      FROM 
+          \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\`
+      WHERE 
+          Campaign_Name = "${Camp_Name}"
+      GROUP BY 
+          DCM_site
+          
+ `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+  const headers = ['Details by platform', 'Budget_AdServer', 'Budget_Plan', 'Budget_Plan_Diff', 'Impressions_AdServer', 'Impressions_Plan', 'Impressions_Plan_Diff', 'Full_Views_AdServer', 'Full_Views_Plan', 'Full_Views_Plan_Diff', 'Reach_Users_Auditor', 'Reach_Users_Plan', 'Reach_Users_Plan_Diff', 'Reach_Users_Auditor_Freq', 'Reach_Users_Plan_Freq', 'Reach_Users_Freq_Diff', 'Clicks_AdServer', 'Clicks_Plan', 'Clicks_Plan_Diff', 'CPC_Fact', 'CPC_Plan', 'CPC_Plan_Diff', 'CPM_Fact', 'CPM_Plan', 'CPM_Plan_Diff', 'CTR_Fact'];
+
+  resultArray.push(headers);
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+        // заміна починаючи з 2 колонки
+        if (typeof cols[j].v === 'string' && j >= 1) {
+          rowData.push(cols[j].v.replace(/\./g, ','));
+        } else {
+          rowData.push(cols[j].v);
+        }
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
+
+function placementSQLQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+      SELECT 
+          Connector_Auditor AS Segment,
+          SUM(Budget_Ads) AS Budget_AdServer,
+          AVG(Budget_Plan) AS Budget_Plan,
+          IFNULL(SUM(Budget_Ads) / NULLIF(AVG(Budget_Plan), 0), 0) AS diff_Budget,
+          SUM(Impressions_Ads) AS Impr_AdServer,
+          AVG(Impressions_Plan) AS Impr_Plan,
+          IFNULL(SUM(Impressions_Ads) / NULLIF(AVG(Impressions_Plan), 0), 0) AS diff_Impr,
+          IFNULL(SUM(Video_Views_100_Ads) / NULLIF(SUM(Impressions_Ads), 0), 0) AS Full_Views_AdServer,
+          AVG(Video_Views_100_Plan) AS Full_Views_Plan,
+          IFNULL(
+              (SUM(Video_Views_100_Ads) / NULLIF(SUM(Impressions_Ads), 0)) / NULLIF(AVG(Video_Views_100_Plan), 0), 
+              0
+          ) AS diff_Views,
+          SUM(User_Reach_Placement_Date_Fact) AS Reach_Users_Auditor,
+          AVG(User_Reach_Placement_Plan) AS Reach_Users_Plan,
+          IFNULL(SUM(User_Reach_Placement_Date_Fact) / NULLIF(AVG(User_Reach_Placement_Plan), 0), 0) AS diff_Reach,
+          IFNULL(SUM(Impressions_Ads) / NULLIF(SUM(User_Reach_Placement_Date_Fact), 0), 0) AS freq_Auditor,
+          IFNULL(AVG(Impressions_Plan) / NULLIF(AVG(User_Reach_Placement_Plan), 0), 0) AS freq_Plan,
+          IFNULL(
+              (SUM(Impressions_Ads) / NULLIF(SUM(User_Reach_Placement_Date_Fact), 0)) / 
+              NULLIF(AVG(Impressions_Plan) / NULLIF(AVG(User_Reach_Placement_Plan), 0), 0), 
+              0
+          ) AS diff_Freq,
+          SUM(Clicks_Ads) AS Clicks_AdServer,
+          AVG(Clicks_Plan) AS Clicks_Plan,
+          IFNULL(SUM(Clicks_Ads) / NULLIF(AVG(Clicks_Plan), 0), 0) AS diff_Clicks,
+          IFNULL(SUM(Budget_Ads) / NULLIF(SUM(Clicks_Ads), 0), 0) AS CPC_Fact,
+          IFNULL(AVG(Budget_Plan) / NULLIF(AVG(Clicks_Plan), 0), 0) AS CPC_Plan,
+          IFNULL(
+              (SUM(Budget_Ads) / NULLIF(SUM(Clicks_Ads), 0)) / 
+              NULLIF(AVG(Budget_Plan) / NULLIF(AVG(Clicks_Plan), 0), 0), 
+              0
+          ) AS diff_CPC,
+          IFNULL(SUM(Budget_Ads) * 1000 / NULLIF(SUM(Impressions_Ads), 0), 0) AS CPM_Fact,
+          IFNULL(AVG(Budget_Plan) * 1000 / NULLIF(AVG(Impressions_Plan), 0), 0) AS CPM_Plan,
+          IFNULL(
+              (SUM(Budget_Ads) * 1000 / NULLIF(SUM(Impressions_Ads), 0)) / 
+              NULLIF(AVG(Budget_Plan) * 1000 / NULLIF(AVG(Impressions_Plan), 0), 0), 
+              0
+          ) AS diff_CPM,
+          AVG(IFNULL(Clicks_Ads / NULLIF(Impressions_Ads, 0), 0)) AS CTR_Fact
+      FROM  
+          \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\`
+      WHERE 
+          Campaign_Name = "${Camp_Name}"
+          AND DCM_site IS NOT NULL
+      GROUP BY 
+          Connector_Auditor
+      ORDER BY 
+          Connector_Auditor;
+          
+ `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+        // заміна починаючи з 2 колонки
+        if (typeof cols[j].v === 'string' && j >= 1) {
+          rowData.push(cols[j].v.replace(/\./g, ','));
+        } else {
+          rowData.push(cols[j].v);
+        }
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
+
+function campSQLQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+        WITH Subquery AS (
+            SELECT 
+                Campaign_Name,
+                AVG(Impressions_Plan) AS Impr_Plan,
+                AVG(Video_Views_100_Plan) AS Full_Views_Plan
+            FROM 
+                \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\`
+            WHERE 
+                Campaign_Name = "${Camp_Name}"
+            GROUP BY 
+                Campaign_Name
+        )
+        SELECT 
+            t.Campaign_Name,
+            SUM(t.Budget_Ads) AS Budget_AdServer,
+            AVG(t.Budget_Campaign_Plan) AS Budget_Plan,
+            CASE WHEN AVG(t.Budget_Campaign_Plan) = 0 THEN 0 ELSE SUM(t.Budget_Ads) / AVG(t.Budget_Campaign_Plan) END AS Budget_Plan_Diff,
+            SUM(t.Impressions_Ads) AS Impressions_AdServer,
+            AVG(t.Impressions_Campaign_Plan) AS Impressions_Plan,
+            CASE WHEN AVG(t.Impressions_Campaign_Plan) = 0 THEN 0 ELSE SUM(t.Impressions_Ads) / AVG(t.Impressions_Campaign_Plan) END AS Impressions_Plan_Diff,
+            SUM(t.Video_Views_100_Ads) / NULLIF(SUM(IF(t.Video_Views_100_Ads > 0, t.Impressions_Ads, 0)), 0) AS Full_Views_AdServer,
+            (SELECT 
+                SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END * s.Full_Views_Plan) / NULLIF(SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END), 0)
+            FROM 
+                Subquery s) AS Full_Views_Plan,
+            CASE 
+                WHEN (SELECT SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END * s.Full_Views_Plan) / NULLIF(SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END), 0) FROM Subquery s) = 0 
+                THEN 0 
+                ELSE SUM(t.Video_Views_100_Ads) / NULLIF(SUM(IF(t.Video_Views_100_Ads > 0, t.Impressions_Ads, 0)), 0) / (SELECT SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END * s.Full_Views_Plan) / NULLIF(SUM(CASE WHEN s.Full_Views_Plan > 0 THEN s.Impr_Plan ELSE 0 END), 0) FROM Subquery s)
+            END AS Full_Views_Plan_Diff,
+            AVG(t.User_Reach_Campaign_Fact) AS Reach_Users_Auditor,
+            AVG(t.User_Reach_Campaign_Plan) AS Reach_Users_Plan,
+            CASE WHEN AVG(t.User_Reach_Campaign_Plan) = 0 THEN 0 ELSE AVG(t.User_Reach_Campaign_Fact) / AVG(t.User_Reach_Campaign_Plan) END AS Reach_Users_Plan_Diff,
+            CASE WHEN AVG(t.User_Reach_Campaign_Fact) = 0 THEN 0 ELSE SUM(t.Impressions_Ads) / AVG(t.User_Reach_Campaign_Fact) END AS Reach_Users_Auditor_Freq,
+            CASE WHEN AVG(t.User_Reach_Campaign_Plan) = 0 THEN 0 ELSE AVG(t.Impressions_Campaign_Plan) / AVG(t.User_Reach_Campaign_Plan) END AS Reach_Users_Plan_Freq,
+            CASE 
+                WHEN AVG(t.User_Reach_Campaign_Plan) = 0 THEN 0 
+                ELSE (SUM(t.Impressions_Ads) / AVG(t.User_Reach_Campaign_Fact)) / (AVG(t.Impressions_Campaign_Plan) / AVG(t.User_Reach_Campaign_Plan))
+            END AS Reach_Users_Freq_Diff,
+            SUM(t.Clicks_Ads) AS Clicks_AdServer,
+            AVG(t.Clicks_Campaign_Plan) AS Clicks_Plan,
+            CASE WHEN AVG(t.Clicks_Campaign_Plan) = 0 THEN 0 ELSE SUM(t.Clicks_Ads) / AVG(t.Clicks_Campaign_Plan) END AS Clicks_Plan_Diff,
+            CASE WHEN SUM(t.Clicks_Ads) = 0 THEN 0 ELSE SUM(t.Budget_Ads) / SUM(t.Clicks_Ads) END AS CPC_Fact,
+            CASE WHEN AVG(t.Clicks_Campaign_Plan) = 0 THEN 0 ELSE AVG(t.Budget_Campaign_Plan) / AVG(t.Clicks_Campaign_Plan) END AS CPC_Plan,
+            CASE 
+                WHEN AVG(t.Clicks_Campaign_Plan) = 0 THEN 0 
+                ELSE (SUM(t.Budget_Ads) / SUM(t.Clicks_Ads)) / (AVG(t.Budget_Campaign_Plan) / AVG(t.Clicks_Campaign_Plan))
+            END AS CPC_Plan_Diff,
+            CASE WHEN SUM(t.Impressions_Ads) = 0 THEN 0 ELSE SUM(t.Budget_Ads) / SUM(t.Impressions_Ads) * 1000 END AS CPM_Fact,
+            CASE WHEN AVG(t.Impressions_Campaign_Plan) = 0 THEN 0 ELSE AVG(t.Budget_Campaign_Plan) * 1000 / AVG(t.Impressions_Campaign_Plan) END AS CPM_Plan,
+            CASE 
+                WHEN AVG(t.Impressions_Campaign_Plan) = 0 THEN 0 
+                ELSE (SUM(t.Budget_Ads) / SUM(t.Impressions_Ads) * 1000) / (AVG(t.Budget_Campaign_Plan) * 1000 / AVG(t.Impressions_Campaign_Plan))
+            END AS CPM_Plan_Diff,
+            AVG(CASE WHEN t.Impressions_Ads = 0 THEN 0 ELSE t.Clicks_Ads / t.Impressions_Ads END) AS CTR_Fact
+        FROM 
+            \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\` t
+        LEFT JOIN 
+            Subquery s ON t.Campaign_Name = s.Campaign_Name
+        WHERE 
+            t.Campaign_Name = "${Camp_Name}"
+        GROUP BY 
+            t.Campaign_Name;
+
+  `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+        // заміна починаючи з 2 колонки
+        if (typeof cols[j].v === 'string' && j >= 1) {
+          rowData.push(cols[j].v.replace(/\./g, ','));
+        } else {
+          rowData.push(cols[j].v);
+        }
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
+
+function siteDaysSQLQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+    DECLARE sql_query STRING;
+    DECLARE dynamic_sql STRING;
+    DECLARE site_names ARRAY<STRING>;
+
+    SET site_names = (
+      SELECT ARRAY_AGG(DISTINCT DCM_site)
+      FROM \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\`
+      WHERE Campaign_Name = "${Camp_Name}"
+      AND DCM_site IS NOT NULL
+    );
+
+    SET dynamic_sql = (
+      SELECT STRING_AGG(
+        FORMAT(
+          """
+          MAX(IF(DCM_site = '%s', Impressions_AdServer, 0)) AS \`%s_Impressions_AdServer\`,
+          MAX(IF(DCM_site = '%s', Budget_AdServer, 0)) AS \`%s_Budget_AdServer\`
+          """,
+          REPLACE(REPLACE(REPLACE(DCM_site, '-', '_'), '.', '_'), ' ', '_'),  -- замінюємо недопустимі символи
+          REPLACE(REPLACE(REPLACE(DCM_site, '-', '_'), '.', '_'), ' ', '_'),
+          REPLACE(REPLACE(REPLACE(DCM_site, '-', '_'), '.', '_'), ' ', '_'),
+          REPLACE(REPLACE(REPLACE(DCM_site, '-', '_'), '.', '_'), ' ', '_')
+        ), 
+        ', '
+      )
+      FROM UNNEST(site_names) AS DCM_site
+    );
+
+    SET sql_query = (
+      SELECT FORMAT(
+        """
+        SELECT Date,
+        %s
+        FROM (
+          SELECT 
+            Date,
+            REPLACE(REPLACE(REPLACE(DCM_site, '-', '_'), '.', '_'), ' ', '_') AS DCM_site,
+            IFNULL(SUM(Impressions_Ads),0) AS Impressions_AdServer,
+            IFNULL(SUM(Budget_Ads),0) AS Budget_AdServer
+          FROM 
+            \`clever-axe-251109.Dashboard_Archive_v4.Traffic_Analysis\`
+          WHERE 
+            Campaign_Name = "${Camp_Name}"
+            AND DCM_site IS NOT NULL
+          GROUP BY 
+            Date, DCM_site
+        )
+        GROUP BY 
+          Date
+        ORDER BY 
+          Date
+        """,
+        dynamic_sql
+      )
+    );
+
+    EXECUTE IMMEDIATE sql_query;
+  `;
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  let columns = queryResults.schema.fields.map(field => field.name); // Отримуємо імена стовпців
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+  resultArray.push(columns); // Додаємо заголовки стовпців як перший рядок
+
+  for (let i = 0; i < rows.length; i++) {
+    const cols = rows[i].f;
+    const rowData = [];
+    for (let j = 0; j < cols.length; j++) {
+      // заміна починаючи з 2 колонки
+      if (typeof cols[j].v === 'string' && j >= 1) {
+        rowData.push(cols[j].v.replace(/\./g, ','));
+      } else {
+        rowData.push(cols[j].v);
+      }
+    }
+    resultArray.push(rowData);
+  }
+    
+  return resultArray;
+}
+function channelsYoutubeQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+        WITH data_with_totals AS (
+          SELECT 
+            placement_name,
+            impressions,
+            cost,
+            clicks,
+            SUM(impressions) OVER() AS total_impressions,
+            SUM(cost) OVER() AS total_cost,
+            SUM(clicks) OVER() AS total_clicks
+          FROM 
+            \`clever-axe-251109.Dashboard_Additional.Placements\`
+          WHERE 
+            placement_type = "YOUTUBE_CHANNEL" AND
+            Campaign_Name = "${Camp_Name}"
+        )
+
+        -- placements
+        SELECT 
+          placement_name AS Channels, 
+          SUM(impressions) AS Impressions,
+          SUM(cost) / MAX(total_cost) AS CostShare, 
+          SUM(cost) AS TotalCost, 
+          SUM(clicks) AS Clicks, 
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(clicks) / SUM(impressions)
+          END AS CTR,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(cost) * 1000 / SUM(impressions)
+          END AS CPM
+        FROM 
+          data_with_totals
+        GROUP BY 
+          placement_name, total_cost
+
+        UNION ALL
+
+        -- total
+        SELECT
+          'TOTAL' AS Channels,
+          SUM(impressions) AS Impressions,
+          1 AS CostShare,
+          SUM(cost) AS TotalCost,
+          SUM(clicks) AS Clicks,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(clicks) / SUM(impressions)
+          END AS CTR,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(cost) * 1000 / SUM(impressions)
+          END AS CPM
+        FROM
+          data_with_totals
+
+        ORDER BY
+          Impressions DESC
+        LIMIT 101;        
+ `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+        // заміна починаючи з 2 колонки
+        if (typeof cols[j].v === 'string' && j >= 1) {
+          rowData.push(cols[j].v.replace(/\./g, ','));
+        } else {
+          rowData.push(cols[j].v);
+        }
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
+function placeNonYoutubeQuery(Camp_Name) {
+  var projectId = 'clever-axe-251109'; 
+  
+  var sqlQuery = `
+        WITH data_with_totals AS (
+          SELECT 
+            placement_name,
+            impressions,
+            cost,
+            clicks,
+            SUM(impressions) OVER() AS total_impressions,
+            SUM(cost) OVER() AS total_cost,
+            SUM(clicks) OVER() AS total_clicks
+          FROM 
+            \`clever-axe-251109.Dashboard_Additional.Placements\`
+          WHERE 
+            placement_type != "YOUTUBE_CHANNEL" AND
+            Campaign_Name = "${Camp_Name}"
+        )
+
+        -- placements
+        SELECT 
+          placement_name AS Channels, 
+          SUM(impressions) AS Impressions,
+          SUM(cost) / MAX(total_cost) AS CostShare, 
+          SUM(cost) AS TotalCost, 
+          SUM(clicks) AS Clicks, 
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(clicks) / SUM(impressions)
+          END AS CTR,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(cost) * 1000 / SUM(impressions)
+          END AS CPM
+        FROM 
+          data_with_totals
+        GROUP BY 
+          placement_name, total_cost
+
+        UNION ALL
+
+        -- total
+        SELECT
+          'TOTAL' AS Channels,
+          SUM(impressions) AS Impressions,
+          1 AS CostShare,
+          SUM(cost) AS TotalCost,
+          SUM(clicks) AS Clicks,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(clicks) / SUM(impressions)
+          END AS CTR,
+          CASE 
+            WHEN SUM(impressions) = 0 THEN 0
+            ELSE SUM(cost) * 1000 / SUM(impressions)
+          END AS CPM
+        FROM
+          data_with_totals
+
+        ORDER BY
+          Impressions DESC
+        LIMIT 101;        
+ `;
+
+
+
+  const request = {
+    query: sqlQuery,
+    useLegacySql: false
+  };
+
+  let queryResults = BigQuery.Jobs.query(request, projectId);
+  const jobId = queryResults.jobReference.jobId;
+
+  while (!queryResults.jobComplete) {
+    Utilities.sleep(1000);
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId);
+  }
+
+  let rows = queryResults.rows;
+  while (queryResults.pageToken) {
+    queryResults = BigQuery.Jobs.getQueryResults(projectId, jobId, {
+      pageToken: queryResults.pageToken
+    });
+    rows = rows.concat(queryResults.rows);
+  }
+
+  if (!rows) {
+    Logger.log('No rows returned.');
+    return;
+  }
+
+  const resultArray = [];
+    for (let i = 0; i < rows.length; i++) {
+      const cols = rows[i].f;
+      const rowData = [];
+      for (let j = 0; j < cols.length; j++) {
+        // заміна починаючи з 2 колонки
+        if (typeof cols[j].v === 'string' && j >= 1) {
+          rowData.push(cols[j].v.replace(/\./g, ','));
+        } else {
+          rowData.push(cols[j].v);
+        }
+      }
+      resultArray.push(rowData);
+    }
+    
+  return resultArray;
+}
