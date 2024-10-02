@@ -1,0 +1,150 @@
+function billing() {
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName("Billing");
+  var check = sheet.getRange("A1").getValue();
+  if(check=="Без Естонії"){
+    sendEmails()
+
+  }
+
+  else {
+  addURL()
+  sendBilling()
+  sendEmails()
+  }
+
+}
+
+
+function sendEmails() {
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName("Billing");
+  var ownurl = ss.getUrl();
+  var EMAIL_SENT = "EMAIL_SENT";
+  var startRow = 2;
+  var startCol = 33;
+
+  // Отримання останнього рядка аркуша
+  var lr = sheet.getLastRow();
+
+  // Отримання даних з аркуша
+  var dataRange = sheet.getRange(startRow, startCol, lr - startRow + 1, 5).getValues();
+
+  // Обчислення кількості рядків з даними
+  var lastRow = dataRange[0].filter(String).length;
+
+  // Отримання даних для відправки
+  var data = sheet.getRange(startRow, startCol, lastRow, 5).getValues();
+  var recipients = [];
+  var ccRecipients = ['diana.dranovskaya@newage.agency',
+                      'evhenyi.shynkarenko@newage.agency',
+                      'dmitry.konovalenko@newage.agency',
+                      'oleksandra.svistova@newage.agency',
+                      'maxim.tereschenko@newage.agency'];
+  var subject = data[0][1];
+  var message = data[0][2];
+  var emailSentColumn = startCol + 3;
+  var dateSentColumn = startCol + 4;
+
+  // Отримання поштової адреси відправника та створення форматованого імені
+  var senderEmail = Session.getActiveUser().getEmail();
+  var emailParts = senderEmail.split("@");
+  var nameParts = emailParts[0].split(".");
+  var senderName = nameParts.map(function(part) {
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }).join(" ");
+  var formattedSenderName = senderName + " | newage. <" + senderEmail + ">";
+
+  // Цикл для підготовки списку отримувачів
+  for (var row of data) {
+    var emailAddress = row[0];
+    var emailSent = row[emailSentColumn];
+
+    // Перевірка, чи лист не був вже відправлений
+    if (emailSent !== EMAIL_SENT) {
+      recipients.push(emailAddress);
+    }
+  }
+
+  if (recipients.length > 0) {
+    // Формування тіла листа
+    var emailBody = 'Колеги, всім привіт! <br>' + message.replace(/\n/g, '<br>') + '<br> За цим посиланням можна знайти сам план: <br>' + ownurl;
+
+    try {
+      // Відправка одного листа всім отримувачам
+      MailApp.sendEmail({
+        to: recipients.join(','),
+        cc: ccRecipients.join(','), // Вказані адреси отримають копії
+        subject: subject,
+        htmlBody: emailBody,
+        name: formattedSenderName // Встановлення імені відправника
+      });
+
+      var dateEmails = Utilities.formatDate(new Date(), "GMT+2", "yyyy-MM-dd HH:mm");
+      var valuesToWrite = [];
+
+      // Підготовка даних для оновлення аркуша
+      for (var i = 0; i < recipients.length; i++) {
+        valuesToWrite.push([EMAIL_SENT, dateEmails]);
+      }
+
+      // Оновлення аркуша з позначками про відправку
+      var rangeToWrite = sheet.getRange(startRow, emailSentColumn, recipients.length, 2);
+      rangeToWrite.setValues(valuesToWrite);
+      // Забезпечення оновлення комірок негайно в разі переривання скрипта
+      SpreadsheetApp.flush();
+    } catch (e) {
+      // Обробка помилки, якщо лист не може бути відправлений
+      Logger.log("Помилка під час відправки листів: " + e);
+    }
+  }
+
+  // Повернення кількості відправлених листів
+  return recipients.length;
+}
+
+
+function addURL() {
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName("Billing");
+  var ownurl=ss.getUrl()
+  var startRow = 2; 
+  var startCol = 23;
+  var lr = sheet.getLastRow()
+  var dataRange = sheet.getRange(startRow, startCol, lr-startRow+1, 1).getValues();
+  var lastRow=dataRange.filter(String).length
+  var dataUrl = sheet.getRange(startRow, startCol-1, lastRow+1, 1).setValue(ownurl);
+
+
+}
+
+function sendBilling() {
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName("Billing");
+  var startRow = 3; 
+  var startCol = 23;
+  var lr = sheet.getLastRow()
+  var dataRange = sheet.getRange(startRow, startCol, lr-startRow+1, 1).getValues();
+  var lastRow=dataRange.filter(String).length
+
+  var data = sheet.getRange(startRow, startCol-1, lastRow+1, 8).getValues();
+  var allUrl = sheet.getRange(startRow-1, 31).getValue();
+  var allTable = SpreadsheetApp.openByUrl(allUrl).getSheetByName("Бух.облік")
+  // remove filter
+    var filterAll= allTable.getFilter()
+    if(filterAll){//null is false
+    filterAll.remove();
+    }
+  //
+  var allLastRow = allTable.getLastRow()
+
+  allTable.getRange(allLastRow + 1, 1, lastRow+1,data[0].length).setValues(data);
+
+  // add date to table
+    var date = Utilities.formatDate(new Date(), "GMT+2", "dd-MM-yyyy")
+    allTable.getRange(allLastRow + 1, data[0].length+1, lastRow,1).setValue(date)
+  allTable.getRange(allLastRow, 10, 1,2).copyTo(allTable.getRange(allLastRow, 10,lastRow+1, 2), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false)
+
+
+}
+
