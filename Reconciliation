@@ -18,11 +18,11 @@ function emailReconcilation() {
   // Отримання даних для відправки
   var data = sheet.getRange(startRow, startCol, lastRow, 5).getValues();
   var recipients = [];
-  var ccRecipients = ['diana.dranovskaya@newage.agency',
-                      'evhenyi.shynkarenko@newage.agency',
-                      'dmitry.konovalenko@newage.agency',
-                      'oleksandra.svistova@newage.agency',
-                      'maxim.tereschenko@newage.agency'];
+  var ccRecipients = ['email1',
+                      'email12',
+                      'email13',
+                      'email14',
+                      'email15'];
   var subject = data[0][1].replace("Initial PLAN", "Reconciliation");
   var message = "  У вкладені звірка, яку ми погодили з партнерами. Прошу підготувати документи.";
   var emailSentColumn = startCol + 5;
